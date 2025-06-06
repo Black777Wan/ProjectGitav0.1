@@ -105,11 +105,14 @@ pub fn get_all_notes(notes_dir: &str) -> Result<Vec<NoteMetadata>, String> {
     let mut notes = Vec::new();
     
     // Walk through the notes directory
-    for entry in WalkDir::new(notes_dir)
-        .follow_links(true)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry_result in WalkDir::new(notes_dir).follow_links(true).into_iter() {
+        let entry = match entry_result {
+            Ok(e) => e,
+            Err(err) => {
+                eprintln!("Error walking directory: {}", err);
+                continue;
+            }
+        };
         let path = entry.path();
         
         // Skip directories and non-markdown files
@@ -118,7 +121,8 @@ pub fn get_all_notes(notes_dir: &str) -> Result<Vec<NoteMetadata>, String> {
         }
         
         // Read the file and extract metadata
-        match read_markdown_file(path.to_str().unwrap()) {
+        let path_str = path.to_str().ok_or_else(|| format!("Invalid UTF-8 path in notes directory: {:?}", path))?;
+        match read_markdown_file(path_str) {
             Ok(note) => {
                 notes.push(NoteMetadata {
                     id: note.id,
@@ -178,12 +182,15 @@ pub fn read_markdown_file(path: &str) -> Result<Note, String> {
     
     // Parse front matter
     let front_matter: NoteFrontMatter = front_matter
-        .map(|fm| serde_yaml::from_str(&fm).unwrap_or_else(|_| NoteFrontMatter {
-            id: None,
-            title: None,
-            created_at: None,
-            updated_at: None,
-            tags: None,
+        .map(|fm_str| serde_yaml::from_str(&fm_str).unwrap_or_else(|err| {
+            eprintln!("Failed to parse front matter YAML for file {}: {}", path, err);
+            NoteFrontMatter {
+                id: None,
+                title: None,
+                created_at: None,
+                updated_at: None,
+                tags: None,
+            }
         }))
         .unwrap_or_else(|| NoteFrontMatter {
             id: None,
@@ -255,12 +262,15 @@ pub fn write_markdown_file(path: &str, content: &str) -> Result<(), String> {
     
     // Parse front matter or create new one
     let mut front_matter_data: NoteFrontMatter = front_matter
-        .map(|fm| serde_yaml::from_str(&fm).unwrap_or_else(|_| NoteFrontMatter {
-            id: None,
-            title: None,
-            created_at: None,
-            updated_at: None,
-            tags: None,
+        .map(|fm_str| serde_yaml::from_str(&fm_str).unwrap_or_else(|err| {
+            eprintln!("Failed to parse front matter YAML for file being written {}: {}", path, err);
+            NoteFrontMatter {
+                id: None,
+                title: None,
+                created_at: None,
+                updated_at: None,
+                tags: None,
+            }
         }))
         .unwrap_or_else(|| NoteFrontMatter {
             id: None,
@@ -312,6 +322,11 @@ pub fn create_note(notes_dir: &str, title: &str, content: &str) -> Result<Note, 
     
     // Create the file path
     let path = Path::new(notes_dir).join(format!("{}.md", filename));
+
+    // Check if file already exists - using create_new later
+    // if path.exists() {
+    //     return Err(format!("Note with generated filename {:?} already exists. Please choose a different title.", path.file_name().unwrap_or_default()));
+    // }
     
     // Create front matter
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
@@ -330,14 +345,22 @@ pub fn create_note(notes_dir: &str, title: &str, content: &str) -> Result<Note, 
     // Combine front matter and content
     let full_content = format!("---\n{}---\n\n{}", front_matter_yaml, content);
     
-    // Write to file
-    let mut file = File::create(&path).map_err(|e| format!("Failed to create file: {}", e))?;
-    file.write_all(full_content.as_bytes()).map_err(|e| format!("Failed to write to file: {}", e))?;
+    // Write to file using create_new to avoid overwriting
+    let mut file = match File::create_new(&path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(format!("Note with generated filename {:?} already exists. Please choose a different title or edit the existing note.", path.file_name().unwrap_or_default()));
+        }
+        Err(e) => return Err(format!("Failed to create file {:?}: {}", path, e)),
+    };
+    file.write_all(full_content.as_bytes()).map_err(|e| format!("Failed to write to file {:?}: {}", path, e))?;
     
+    let path_str = path.to_str().ok_or_else(|| format!("Generated path for new note is not valid UTF-8: {:?}", path))?;
+
     Ok(Note {
         id,
         title: title.to_string(),
-        path: path.to_str().unwrap().to_string(),
+        path: path_str.to_string(),
         content: content.to_string(),
         created_at: now.clone(),
         updated_at: now,
@@ -356,7 +379,8 @@ pub fn create_daily_note(notes_dir: &str) -> Result<Note, String> {
     let path = Path::new(notes_dir).join(format!("{}.md", filename));
     if path.exists() {
         // If it exists, just read and return it
-        return read_markdown_file(path.to_str().unwrap());
+        let path_str = path.to_str().ok_or_else(|| format!("Daily note path is not valid UTF-8: {:?}", path))?;
+        return read_markdown_file(path_str);
     }
     
     // Generate a unique ID
@@ -383,13 +407,15 @@ pub fn create_daily_note(notes_dir: &str) -> Result<Note, String> {
     let full_content = format!("---\n{}---\n\n{}", front_matter_yaml, content);
     
     // Write to file
-    let mut file = File::create(&path).map_err(|e| format!("Failed to create file: {}", e))?;
-    file.write_all(full_content.as_bytes()).map_err(|e| format!("Failed to write to file: {}", e))?;
+    let mut file = File::create(&path).map_err(|e| format!("Failed to create file {:?}: {}", path, e))?;
+    file.write_all(full_content.as_bytes()).map_err(|e| format!("Failed to write to file {:?}: {}", path, e))?;
     
+    let path_str = path.to_str().ok_or_else(|| format!("Generated path for new daily note is not valid UTF-8: {:?}", path))?;
+
     Ok(Note {
         id,
         title,
-        path: path.to_str().unwrap().to_string(),
+        path: path_str.to_string(),
         content,
         created_at: now.clone(),
         updated_at: now,

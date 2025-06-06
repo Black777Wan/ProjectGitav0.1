@@ -1,8 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { FiClock, FiPlay, FiTrash2 } from 'react-icons/fi';
+import { FiClock, FiPlay, FiTrash2, FiLoader, FiAlertTriangle } from 'react-icons/fi'; // Added Loader and AlertTriangle
 import { AudioRecording } from '../types';
 import { getAudioRecordings } from '../api/audio';
 import AudioPlayer from './AudioPlayer';
+import { convertFileSrc } from '@tauri-apps/api/tauri'; // Import convertFileSrc
+
+// --- PlayableAudioItem Sub-component ---
+interface PlayableAudioItemProps {
+  filePath: string;
+  startTime?: number; // Optional, defaults to 0
+}
+
+const PlayableAudioItem: React.FC<PlayableAudioItemProps> = ({ filePath, startTime = 0 }) => {
+  const [playableSrc, setPlayableSrc] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (filePath) {
+      setIsLoading(true);
+      setError(null);
+      setPlayableSrc(null); // Reset before attempting to load
+      try {
+        const src = convertFileSrc(filePath);
+        setPlayableSrc(src);
+      } catch (e) {
+        console.error(`Error converting file path ${filePath}:`, e);
+        setError("Could not load audio source.");
+        setPlayableSrc(null);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setError("No file path provided.");
+      setIsLoading(false);
+    }
+  }, [filePath]);
+
+  if (isLoading) return (
+    <div className="text-xs text-obsidian-muted flex items-center">
+      <FiLoader className="animate-spin mr-2" /> Loading player...
+    </div>
+  );
+  if (error) return (
+    <div className="text-xs text-red-500 flex items-center">
+      <FiAlertTriangle className="mr-2" /> {error}
+    </div>
+  );
+  if (!playableSrc) return (
+    <div className="text-xs text-obsidian-muted">
+      Audio not available.
+    </div>
+  );
+
+  return <AudioPlayer audioSrc={playableSrc} startTime={startTime / 1000} />; // Assuming AudioPlayer expects seconds
+};
+// --- End PlayableAudioItem Sub-component ---
+
 
 interface AudioRecordingsListProps {
   noteId: string;
@@ -103,9 +157,10 @@ const AudioRecordingsList: React.FC<AudioRecordingsListProps> = ({ noteId }) => 
               
               {expandedRecordingId === recording.id && (
                 <div className="mt-3">
-                  <AudioPlayer
-                    audioSrc={recording.filePath}
-                    startTime={0}
+                  <PlayableAudioItem
+                    filePath={recording.filePath}
+                    // startTime is 0 for full playback here, PlayableAudioItem defaults to 0 if not provided
+                    // AudioPlayer inside PlayableAudioItem will handle ms to seconds conversion if necessary
                   />
                 </div>
               )}

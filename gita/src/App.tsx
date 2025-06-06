@@ -6,16 +6,18 @@ import AudioRecordingsList from "./components/AudioRecordingsList";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import ThemeToggle from "./components/ThemeToggle";
 import { Note } from "./types";
-import { getAllNotes, readMarkdownFile, writeMarkdownFile, createNote, createDailyNote } from "./api/fileSystem";
-import { startRecording, stopRecording } from "./api/audio";
+import { getAllNotes, readMarkdownFile, writeMarkdownFile, createNote, createDailyNote, getAudioDirectory } from "./api/fileSystem"; // Added getAudioDirectory
+import { invoke } from "@tauri-apps/api/tauri"; // Import invoke
+import { v4 as uuidv4 } from 'uuid'; // Import uuid
+// import { startRecording, stopRecording } from "./api/audio"; // These will be invoked by toolbar via Tauri
 import { FiHelpCircle, FiSettings } from "react-icons/fi";
 import Tooltip from "./components/Tooltip";
+import { useAudioRecordingStore } from "./stores/audioRecordingStore"; // Import Zustand store
 
 function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [currentRecordingId, setCurrentRecordingId] = useState<string | null>(null);
+  // Removed local isRecording and currentRecordingId state
   const [isLoading, setIsLoading] = useState(true);
   const [showAudioRecordings, setShowAudioRecordings] = useState(false);
   const [audioRecordingsNoteId, setAudioRecordingsNoteId] = useState<string | null>(null);
@@ -97,13 +99,49 @@ function App() {
         handleSaveNote();
       }
       
-      // Ctrl+R: Toggle recording
+      // Ctrl+R: Toggle recording globally
       if (e.ctrlKey && e.key === 'r') {
         e.preventDefault();
-        if (isRecording) {
-          handleStopRecording();
+        const storeState = useAudioRecordingStore.getState();
+        const storeActions = storeState.actions;
+
+        if (storeState.isRecordingActive) {
+          // Stop recording
+          if (storeState.currentRecordingId) {
+            invoke('stop_recording', { recordingId: storeState.currentRecordingId })
+              .then(() => {
+                storeActions.stopRecording();
+                console.log("Global shortcut: Recording stopped.");
+              })
+              .catch(err => {
+                console.error("Global shortcut: Failed to stop recording via invoke:", err);
+                // Optionally still update UI store state if backend failed but we want UI to reflect stop
+                // storeActions.stopRecording();
+              });
+          } else {
+            console.warn("Global shortcut: Stop recording attempted but no currentRecordingId in store.");
+            storeActions.stopRecording(); // Still try to reset UI state
+          }
         } else {
-          handleStartRecording();
+          // Start recording
+          if (selectedNoteId) {
+            const newRecordingId = uuidv4();
+            getAudioDirectory()
+              .then(audioDir => {
+                const anticipatedFilePath = `${audioDir}/${newRecordingId}.wav`;
+                return invoke('start_recording', { noteId: selectedNoteId, recordingId: newRecordingId })
+                  .then(() => {
+                    storeActions.startRecording(newRecordingId, anticipatedFilePath);
+                    console.log("Global shortcut: Recording started.");
+                  });
+              })
+              .catch(err => {
+                console.error("Global shortcut: Failed to start recording:", err);
+              });
+          } else {
+            console.warn("Global shortcut: Start recording attempted but no note selected.");
+            // Optionally inform user: "Please select a note to start recording."
+          }
         }
       }
       
@@ -124,7 +162,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isRecording, selectedNoteId]);
+  }, [selectedNoteId]); // Removed isRecording from dependencies
 
   const handleNewNote = async () => {
     try {
@@ -165,34 +203,8 @@ function App() {
     }
   };
 
-  const handleStartRecording = async () => {
-    if (!selectedNoteId) return;
-    
-    try {
-      // Generate a unique recording ID
-      const recordingId = `rec_${Date.now()}`;
-      
-      await startRecording(selectedNoteId, recordingId);
-      
-      setIsRecording(true);
-      setCurrentRecordingId(recordingId);
-    } catch (error) {
-      console.error("Failed to start recording:", error);
-    }
-  };
-
-  const handleStopRecording = async () => {
-    if (!currentRecordingId) return;
-    
-    try {
-      await stopRecording(currentRecordingId);
-      
-      setIsRecording(false);
-      setCurrentRecordingId(null);
-    } catch (error) {
-      console.error("Failed to stop recording:", error);
-    }
-  };
+  // Removed handleStartRecording and handleStopRecording functions
+  // Their logic is now in EditorToolbar.tsx, using Zustand store and Tauri invoke.
 
   const handleSaveNote = async () => {
     if (!selectedNote) return;
@@ -297,16 +309,15 @@ function App() {
             <div className="h-full animate-fadeIn">
               <EditorContainer
                 noteTitle={selectedNote.title}
-                isRecording={isRecording}
-                onStartRecording={handleStartRecording}
-                onStopRecording={handleStopRecording}
+                currentNoteId={selectedNote.id} // Pass currentNoteId
+                // isRecording, onStartRecording, onStopRecording removed
                 onSave={handleSaveNote}
               >
                 <LexicalEditor 
                   initialContent={selectedNote.content}
                   onChange={handleEditorChange}
-                  isRecording={isRecording}
-                  currentRecordingId={currentRecordingId}
+                  currentNoteId={selectedNote.id} // Pass currentNoteId
+                  // isRecording, currentRecordingId props removed
                 />
               </EditorContainer>
             </div>

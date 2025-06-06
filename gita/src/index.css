@@ -4,16 +4,49 @@
 
 @layer base {
   :root {
+    /* Light Theme Variables */
+    --color-bg-light: #ffffff;
+    --color-text-light: #2d3748; /* Example: gray-700 */
+    --color-border-light: #e2e8f0; /* Example: gray-300 */
+    --color-muted-light: #718096; /* Example: gray-500 */
+    --color-accent-light: #5A67D8; /* Example: indigo-600 */
+    --color-hover-light: #f7fafc; /* Example: gray-100 */
+    --color-active-light: #edf2f7; /* Example: gray-200 */
+
+    /* Dark Theme Variables (can reuse from Tailwind config or define specific ones) */
+    --color-bg-dark: #202020;       /* obsidian-bg */
+    --color-text-dark: #DCDDDE;     /* obsidian-text */
+    --color-border-dark: #333333;   /* obsidian-border */
+    --color-muted-dark: #999999;    /* obsidian-muted */
+    --color-accent-dark: #7F6DF2;   /* obsidian-accent */
+    --color-hover-dark: #303030;    /* obsidian-hover */
+    --color-active-dark: #383838;   /* obsidian-active */
+
     font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
     font-size: 16px;
     line-height: 24px;
     font-weight: 400;
+
+    /* Default to light theme */
+    color-scheme: light;
+    background-color: var(--color-bg-light);
+    color: var(--color-text-light);
+  }
+
+  html.dark :root {
     color-scheme: dark;
+    background-color: var(--color-bg-dark);
+    color: var(--color-text-dark);
   }
 
   body {
-    @apply bg-obsidian-bg text-obsidian-text m-0 p-0 min-h-screen;
+    /* Use CSS variables for body background and text */
+    @apply bg-[var(--color-bg-light)] text-[var(--color-text-light)] m-0 p-0 min-h-screen;
     font-feature-settings: "liga" 1, "calt" 1;
+  }
+
+  html.dark body {
+    @apply bg-[var(--color-bg-dark)] text-[var(--color-text-dark)];
   }
 
   /* Custom scrollbar styling */
@@ -23,15 +56,20 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-obsidian-bg;
+    @apply bg-[var(--color-bg-light)]; /* Light theme scrollbar track */
+  }
+  html.dark ::-webkit-scrollbar-track {
+    @apply bg-[var(--color-bg-dark)]; /* Dark theme scrollbar track */
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-obsidian-border rounded-full;
+    @apply bg-gray-400 rounded-full; /* Example light thumb */
   }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-obsidian-muted;
+  html.dark ::-webkit-scrollbar-thumb {
+    @apply bg-[var(--color-border-dark)] rounded-full; /* Use dark variable */
+  }
+  html.dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-[var(--color-muted-dark)]; /* Use dark variable */
   }
   
   /* Focus styles */

@@ -5,30 +5,37 @@ import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
-import { ListItemNode, ListNode } from '@lexical/list';
+import { ListItemNode, ListNode, CheckListNode } from '@lexical/list'; // Added CheckListNode
 import { CodeHighlightNode, CodeNode } from '@lexical/code';
 import { TableNode, TableCellNode, TableRowNode } from '@lexical/table';
 import { AutoLinkNode, LinkNode } from '@lexical/link';
+
+// Assuming custom node paths - user will need to verify/adjust
+import { BlockReferenceNode } from '../nodes/BlockReferenceNode';
+// import { AudioBlockNode } from '../nodes/AudioBlockNode'; // If AudioBlockNode is also needed
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { EditorState } from 'lexical';
 
+import { markdownToLexical, lexicalToMarkdown } from '../../utils/markdownUtils';
 import EditorToolbar from './EditorToolbar';
+import AutoTimestampPlugin from './plugins/AutoTimestampPlugin'; // Import the new plugin
 import './LexicalEditor.css';
 
 interface LexicalEditorProps {
   initialContent?: string;
   onChange?: (content: string) => void;
-  isRecording: boolean;
-  currentRecordingId: string | null;
+  // isRecording and currentRecordingId are removed as Toolbar will get them from Zustand store
+  currentNoteId: string; // Added to pass to toolbar for start_recording command
 }
 
 const LexicalEditor: React.FC<LexicalEditorProps> = ({
   initialContent = '',
   onChange,
-  isRecording,
-  currentRecordingId
+  currentNoteId // Added
 }) => {
   // Define the editor theme
   const theme = {
@@ -99,6 +106,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
 
   // Define the editor config
   const editorConfig = {
+    editorState: initialContent ? markdownToLexical(initialContent) : undefined, // Or markdownToLexical(initialContent || "") which is safer
     namespace: 'obsidian-replica-editor',
     theme,
     onError: (error: Error) => {
@@ -116,13 +124,17 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
       TableRowNode,
       AutoLinkNode,
       LinkNode,
+      CheckListNode, // Register CheckListNode
+      BlockReferenceNode, // Register BlockReferenceNode
+      // AudioBlockNode, // Register AudioBlockNode if used
     ],
   };
 
   // Handle editor state changes
-  const handleEditorChange = (editorState: any) => {
+  const handleEditorChange = (editorState: EditorState) => {
     if (onChange) {
-      onChange("# Sample Content\n\nThis is a placeholder for the actual content.");
+      const markdown = lexicalToMarkdown(editorState);
+      onChange(markdown);
     }
   };
 
@@ -130,7 +142,8 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
     <div className="lexical-editor-container">
       <LexicalComposer initialConfig={editorConfig}>
         <div className="editor-inner">
-          <EditorToolbar isRecording={isRecording} />
+          {/* Pass currentNoteId to EditorToolbar */}
+          <EditorToolbar currentNoteId={currentNoteId} />
           <div className="editor-content">
             <RichTextPlugin
               contentEditable={<ContentEditable className="editor-input" />}
@@ -141,6 +154,8 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
             <ListPlugin />
             <LinkPlugin />
             <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+            <OnChangePlugin onChange={handleEditorChange} />
+            <AutoTimestampPlugin /> {/* Add the new plugin here */}
           </div>
         </div>
       </LexicalComposer>
