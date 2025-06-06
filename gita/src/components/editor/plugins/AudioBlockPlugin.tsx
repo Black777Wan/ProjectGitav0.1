@@ -6,48 +6,16 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Define a custom command for inserting audio blocks
 export const INSERT_AUDIO_BLOCK_COMMAND: LexicalCommand<{
-  audioSrc: string;
-  blockId: string;
-  startTime: number;
+  audioFilePath: string; // Changed from audioSrc
   recordingId: string;
+  blockId?: string; // blockId is now optional, can be generated
+  startTime?: number; // startTime is optional, defaults to 0 for full snippets
 }> = createCommand('INSERT_AUDIO_BLOCK_COMMAND');
 
-interface AudioBlockPluginProps {
-  isRecording: boolean;
-  currentRecordingId: string | null;
-}
-
-export default function AudioBlockPlugin({
-  isRecording,
-  currentRecordingId
-}: AudioBlockPluginProps): null {
+// The plugin no longer needs to know about global recording state directly
+// for automatic insertion. It only handles the command.
+export default function AudioBlockPlugin(): null {
   const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    // This effect handles the insertion of audio blocks when recording starts
-    if (isRecording && currentRecordingId) {
-      // When recording starts, we want to insert an audio block at the current cursor position
-      editor.update(() => {
-        const selection = $getSelection();
-        
-        if ($isRangeSelection(selection)) {
-          const blockId = `block-${uuidv4()}`;
-          const audioSrc = `recording://${currentRecordingId}`; // This is a placeholder path
-          const startTime = Date.now();
-          
-          // Create and insert the audio block node
-          const audioBlockNode = $createAudioBlockNode(
-            audioSrc,
-            blockId,
-            0, // Start time within the recording (0 for beginning)
-            currentRecordingId
-          );
-          
-          selection.insertNodes([audioBlockNode]);
-        }
-      });
-    }
-  }, [isRecording, currentRecordingId, editor]);
 
   useEffect(() => {
     // Register command listener for inserting audio blocks
@@ -58,9 +26,12 @@ export default function AudioBlockPlugin({
           const selection = $getSelection();
           
           if ($isRangeSelection(selection)) {
-            const { audioSrc, blockId, startTime, recordingId } = payload;
+            const { audioFilePath, recordingId } = payload;
+            const blockId = payload.blockId || `block-${uuidv4()}`; // Generate blockId if not provided
+            const startTime = payload.startTime || 0; // Default startTime to 0 if not provided
+
             const audioBlockNode = $createAudioBlockNode(
-              audioSrc,
+              audioFilePath, // Use audioFilePath
               blockId,
               startTime,
               recordingId
@@ -70,7 +41,7 @@ export default function AudioBlockPlugin({
           }
         });
         
-        return true;
+        return true; // Command was handled
       },
       COMMAND_PRIORITY_EDITOR
     );
