@@ -22,27 +22,34 @@
     ],
     "security": {
       "csp": null,
-      "allowlist": {
-        "all": false,
-        "shell": {
-          "all": false,
-          "open": true
-        },
-        "dialog": {
-          "all": true
-        },
-        "fs": {
-          "all": true,
-          "scope": ["$APP/*", "$DOCUMENT/*"]
-        },
-        "path": {
-          "all": true
-        },
-        "protocol": {
-          "asset": true,
-          "assetScope": ["$APP/*"]
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APP/*"]
+      },
+      "capabilities": [
+        {
+          "identifier": "default-ipc",
+          "description": "Capability for default IPC permissions",
+          "windows": ["*"],
+          "permissions": [
+            "tauri:shell_open",
+            "tauri:dialog_open",
+            "tauri:dialog_save",
+            "tauri:dialog_message",
+            "tauri:fs_read_dir_recursive",
+            "tauri:fs_read_file",
+            "tauri:fs_write_file_append",
+            "tauri:fs_write_file",
+            "tauri:fs_create_dir_recursive",
+            "tauri:fs_remove",
+            "tauri:fs_rename",
+            "tauri:fs_copy_file",
+            "tauri:fs_exists",
+            "tauri:path_all",
+            "tauri:protocol_asset"
+          ]
         }
-      }
+      ]
     }
   },
   "bundle": {
