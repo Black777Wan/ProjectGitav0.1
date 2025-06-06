@@ -6,32 +6,35 @@ interface ThemeToggleProps {
 }
 
 const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true);
-
-  // Initialize theme from local storage or system preference
-  useEffect(() => {
+  /**
+   * Initializes the `isDarkMode` state.
+   * Priority:
+   * 1. Value from `localStorage` (if previously set by the user).
+   * 2. System preference (`prefers-color-scheme`).
+   */
+  const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) {
-      setIsDarkMode(savedTheme === 'dark');
-    } else {
-      // Check system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setIsDarkMode(prefersDark);
+      return savedTheme === 'dark';
     }
-  }, []);
+    // If no theme is saved in localStorage, use the system preference.
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
 
-  // Apply theme changes
+  /**
+   * Effect to apply theme changes to the application.
+   * When `isDarkMode` changes:
+   * 1. Adds or removes the 'dark' class from the `<html>` element (`document.documentElement`).
+   *    This class is used by Tailwind CSS for dark mode styling (`darkMode: 'class'`).
+   * 2. Saves the current theme preference to `localStorage`.
+   */
   useEffect(() => {
-    // In a real implementation, this would update CSS variables or class names
-    // For now, we'll just save the preference
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    
-    // This is a placeholder for actual theme switching logic
-    console.log(`Theme switched to ${isDarkMode ? 'dark' : 'light'} mode`);
-    
-    // In a full implementation, we would update the document class or CSS variables
-    // document.documentElement.classList.toggle('dark-theme', isDarkMode);
-    // document.documentElement.classList.toggle('light-theme', !isDarkMode);
   }, [isDarkMode]);
 
   const toggleTheme = () => {
@@ -41,10 +44,11 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
   return (
     <button
       onClick={toggleTheme}
-      className={`p-2 rounded-full hover:bg-obsidian-hover transition-colors duration-200 ${className}`}
+      // Update button styling to be theme-aware
+      className={`p-2 rounded-full hover:bg-light-hover dark:hover:bg-obsidian-hover transition-colors duration-200 ${className}`}
       title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
     >
-      {isDarkMode ? <FiSun size={18} /> : <FiMoon size={18} />}
+      {isDarkMode ? <FiSun size={18} className="text-obsidian-text" /> : <FiMoon size={18} className="text-light-text" />}
     </button>
   );
 };

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/tauri'; // Import for tauri
 import AudioPlayer from '../AudioPlayer';
-// import { getAudioBlockReferences } from '../../api/audio'; // This import seems unused here
 
 interface AudioBlockComponentProps {
   blockId: string;
@@ -17,31 +16,41 @@ const AudioBlockComponent: React.FC<AudioBlockComponentProps> = ({
   startTime
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // Start with loading true
+  // isLoading: True when initially attempting to convert audioFilePath or if path changes.
+  const [isLoading, setIsLoading] = useState(true);
+  // error: Stores any error message from `convertFileSrc` or if path is missing.
   const [error, setError] = useState<string | null>(null);
+  // playableAudioSrc: Stores the result of `convertFileSrc` (e.g., "asset://localhost/...").
   const [playableAudioSrc, setPlayableAudioSrc] = useState<string | null>(null);
 
+  /**
+   * Effect to convert the local `audioFilePath` into a playable URL using Tauri's `convertFileSrc`.
+   * This is necessary because webviews cannot directly access arbitrary local file system paths.
+   * `convertFileSrc` generates a URL (e.g., asset://localhost/path/to/file) that Tauri's asset protocol can serve.
+   * This effect runs when `audioFilePath` changes.
+   */
   useEffect(() => {
     if (audioFilePath) {
       setIsLoading(true);
       setError(null);
       try {
-        // Ensure this runs only on the client-side if it's in a component that might be SSR'd (not an issue for Tauri)
+        // `convertFileSrc` must be called on the client-side.
+        // In Tauri, components are client-side, so this is fine.
         const src = convertFileSrc(audioFilePath);
         setPlayableAudioSrc(src);
-        setIsLoading(false);
       } catch (e) {
         console.error("Error converting file path for audio block:", audioFilePath, e);
-        setError("Failed to load audio source. Check console for details.");
+        setError("Failed to load audio source. File path may be invalid or inaccessible.");
+      } finally {
         setIsLoading(false);
       }
     } else {
       setError("Audio file path is not provided.");
-      setIsLoading(false);
+      setIsLoading(false); // Ensure loading stops if no path
     }
   }, [audioFilePath]);
 
-  // Function to toggle the expanded state
+  // Function to toggle the expanded state for the AudioPlayer
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
   };

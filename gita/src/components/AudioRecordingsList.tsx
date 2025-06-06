@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { FiClock, FiPlay, FiTrash2 } from 'react-icons/fi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { convertFileSrc } from '@tauri-apps/api/tauri';
+import { FiClock, FiPlay, FiTrash2, FiLoader } from 'react-icons/fi';
 import { AudioRecording } from '../types';
 import { getAudioRecordings } from '../api/audio';
 import AudioPlayer from './AudioPlayer';
@@ -10,9 +11,14 @@ interface AudioRecordingsListProps {
 
 const AudioRecordingsList: React.FC<AudioRecordingsListProps> = ({ noteId }) => {
   const [recordings, setRecordings] = useState<AudioRecording[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [expandedRecordingId, setExpandedRecordingId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // For loading the list of recordings
+  const [error, setError] = useState<string | null>(null); // For errors during list loading
+  const [expandedRecordingId, setExpandedRecordingId] = useState<string | null>(null); // ID of the currently expanded recording
+
+  // State for the currently expanded recording's playable audio source and related errors/loading
+  const [currentPlayableSrc, setCurrentPlayableSrc] = useState<string | null>(null); // Asset URL from convertFileSrc
+  const [conversionError, setConversionError] = useState<string | null>(null); // Error during convertFileSrc
+  const [isConvertingSrc, setIsConvertingSrc] = useState(false); // True while convertFileSrc is running
 
   // Load recordings when the component mounts or noteId changes
   useEffect(() => {
@@ -48,14 +54,40 @@ const AudioRecordingsList: React.FC<AudioRecordingsListProps> = ({ noteId }) => 
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Toggle expanded state for a recording
-  const toggleExpanded = (recordingId: string) => {
+  /**
+   * Toggles the expanded state for a recording item.
+   * When a recording is expanded, its `filePath` is converted to a playable
+   * URL using Tauri's `convertFileSrc`. This URL is then used by the AudioPlayer.
+   * Handles loading and error states for this conversion process.
+   */
+  const toggleExpanded = useCallback(async (recordingId: string) => {
+    setConversionError(null);
+    setCurrentPlayableSrc(null);
+
     if (expandedRecordingId === recordingId) {
+      // If already expanded, collapse it
       setExpandedRecordingId(null);
     } else {
+      // If different recording or none expanded, expand this one
       setExpandedRecordingId(recordingId);
+      const recording = recordings.find(r => r.id === recordingId);
+      if (recording) {
+        setIsConvertingSrc(true); // Indicate that we are preparing the audio source
+        try {
+          // `convertFileSrc` is essential for Tauri to serve local files to the webview.
+          // It transforms a local file path into a URL like `asset://localhost/path/to/file`.
+          const playableSrc = convertFileSrc(recording.filePath);
+          setCurrentPlayableSrc(playableSrc);
+        } catch (e) {
+          console.error("Error converting file path for playback:", recording.filePath, e);
+          setConversionError("Could not load audio. File path may be invalid or inaccessible.");
+          setCurrentPlayableSrc(null);
+        } finally {
+          setIsConvertingSrc(false); // Conversion attempt finished
+        }
+      }
     }
-  };
+  }, [expandedRecordingId, recordings]); // Depends on current expanded ID and the list of recordings
 
   return (
     <div className="p-4">
@@ -78,10 +110,15 @@ const AudioRecordingsList: React.FC<AudioRecordingsListProps> = ({ noteId }) => 
                 <div className="flex items-center">
                   <button
                     onClick={() => toggleExpanded(recording.id)}
-                    className="p-2 rounded-full bg-obsidian-accent text-white mr-3"
+                    className="p-2 rounded-full bg-obsidian-accent text-white mr-3 flex items-center justify-center"
                     title={expandedRecordingId === recording.id ? "Hide Player" : "Show Player"}
+                    disabled={isConvertingSrc && expandedRecordingId === recording.id}
                   >
-                    <FiPlay size={14} />
+                    {isConvertingSrc && expandedRecordingId === recording.id ? (
+                      <FiLoader size={14} className="animate-spin" />
+                    ) : (
+                      <FiPlay size={14} />
+                    )}
                   </button>
                   <div>
                     <div className="text-sm font-medium">
@@ -103,10 +140,18 @@ const AudioRecordingsList: React.FC<AudioRecordingsListProps> = ({ noteId }) => 
               
               {expandedRecordingId === recording.id && (
                 <div className="mt-3">
-                  <AudioPlayer
-                    audioSrc={recording.filePath}
-                    startTime={0}
-                  />
+                  {isConvertingSrc ? (
+                    <div className="text-center text-obsidian-muted text-sm py-2">Loading player...</div>
+                  ) : conversionError ? (
+                    <div className="text-center text-red-500 text-sm py-2">{conversionError}</div>
+                  ) : currentPlayableSrc ? (
+                    <AudioPlayer
+                      audioSrc={currentPlayableSrc}
+                      startTime={0}
+                    />
+                  ) : (
+                    <div className="text-center text-obsidian-muted text-sm py-2">Could not load audio player.</div>
+                  )}
                 </div>
               )}
             </div>
