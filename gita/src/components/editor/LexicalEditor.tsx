@@ -12,7 +12,7 @@ import { AutoLinkNode, LinkNode } from '@lexical/link';
 
 // Assuming custom node paths - user will need to verify/adjust
 import { BlockReferenceNode } from '../nodes/BlockReferenceNode';
-// import { AudioBlockNode } from '../nodes/AudioBlockNode'; // If AudioBlockNode is also needed
+import { AudioBlockNode } from '../nodes/AudioBlockNode'; // Uncommented and path assumed correct
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
@@ -126,7 +126,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
       LinkNode,
       CheckListNode, // Register CheckListNode
       BlockReferenceNode, // Register BlockReferenceNode
-      // AudioBlockNode, // Register AudioBlockNode if used
+      AudioBlockNode, // Register AudioBlockNode
     ],
   };
 
