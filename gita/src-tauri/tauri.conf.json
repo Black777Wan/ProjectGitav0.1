@@ -1,16 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/tooling/cli/schema.json",
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
-  },
   "package": {
     "productName": "Obsidian Replica",
-    "version": "0.1.0"
+    "version": "0.1.0",
+    "identifier": "com.manus.obsidianreplica"
   },
   "tauri": {
+    "build": {
+      "beforeDevCommand": "npm run dev",
+      "beforeBuildCommand": "npm run build",
+      "devPath": "http://localhost:1420",
+      "distDir": "../dist"
+    },
     "allowlist": {
       "all": false,
       "shell": {
@@ -41,7 +42,6 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.manus.obsidianreplica",
       "targets": "all",
       "category": "Productivity"
     },
@@ -64,4 +64,3 @@
     ]
   }
 }
-
