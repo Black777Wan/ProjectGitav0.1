@@ -1,7 +1,7 @@
 {
   "productName": "Obsidian Replica",
   "version": "0.1.0",
-  "identifier": "com.manus.obsidianreplica",
+  "identifier": "com.ydnotes.gita",
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
@@ -28,25 +28,25 @@
       },
       "capabilities": [
         {
-          "identifier": "default-ipc",
-          "description": "Capability for default IPC permissions",
+          "identifier": "basic",
+          "description": "Basic permissions",
           "windows": ["*"],
           "permissions": [
-            "tauri:shell_open",
-            "tauri:dialog_open",
-            "tauri:dialog_save",
-            "tauri:dialog_message",
-            "tauri:fs_read_dir_recursive",
-            "tauri:fs_read_file",
-            "tauri:fs_write_file_append",
-            "tauri:fs_write_file",
-            "tauri:fs_create_dir_recursive",
-            "tauri:fs_remove",
-            "tauri:fs_rename",
-            "tauri:fs_copy_file",
-            "tauri:fs_exists",
-            "tauri:path_all",
-            "tauri:protocol_asset"
+            "tauri:shell-open",
+            "tauri:dialog-open",
+            "tauri:dialog-save",
+            "tauri:dialog-message",
+            "tauri:fs-read-dir-recursive",
+            "tauri:fs-read-file",
+            "tauri:fs-write-file-append",
+            "tauri:fs-write-file",
+            "tauri:fs-create-dir-recursive",
+            "tauri:fs-remove",
+            "tauri:fs-rename",
+            "tauri:fs-copy-file",
+            "tauri:fs-exists",
+            "tauri:path-all",
+            "tauri:protocol-asset"
           ]
         }
       ]
