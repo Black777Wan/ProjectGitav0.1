@@ -1,31 +1,33 @@
 [package]
-name = "gita"
+name = "obsidian-replica"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "An Obsidian replica with markdown editing and audio recording features"
+authors = ["Manus AI"]
+license = ""
+repository = ""
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "gita_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.0.0-beta", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+tauri = { version = "2.0.0-beta", features = ["shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-cpal = "0.15"
-hound = "3.5"
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.8", features = ["v4", "serde"] }
-ripgrep = "14.1.0"
-lazy_static = "1.4"
+rusqlite = { version = "0.29.0", features = ["bundled"] }
+walkdir = "2.3.3"
+notify = "4.0.17"
+regex = "1.9.1"
+chrono = "0.4.26"
+serde_yaml = "0.9.21"
+cpal = "0.15.2"
+hound = "3.5.0"
+lazy_static = "1.4.0"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
 

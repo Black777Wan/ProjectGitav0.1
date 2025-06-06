@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-obsidian-bg text-obsidian-text m-0 p-0 min-h-screen;
+    font-feature-settings: "liga" 1, "calt" 1;
+  }
+
+  /* Custom scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-obsidian-bg;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-obsidian-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-obsidian-muted;
+  }
+  
+  /* Focus styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-obsidian-accent ring-opacity-70;
+  }
+  
+  /* Transitions */
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .sidebar-item {
+    @apply flex items-center px-3 py-2 text-sm text-obsidian-text hover:bg-obsidian-hover rounded cursor-pointer transition-all duration-200;
+  }
+
+  .sidebar-item.active {
+    @apply bg-obsidian-active text-obsidian-accent;
+  }
+
+  .note-list-item {
+    @apply px-3 py-2 hover:bg-obsidian-hover cursor-pointer border-b border-obsidian-border transition-all duration-200;
+  }
+
+  .note-list-item.active {
+    @apply bg-obsidian-active border-l-2 border-l-obsidian-accent;
+  }
+
+  .editor-container {
+    @apply p-4 h-full overflow-auto;
+  }
+
+  .audio-button {
+    @apply inline-flex items-center justify-center w-5 h-5 rounded-full bg-obsidian-accent text-white hover:bg-opacity-80 focus:outline-none transition-all duration-200;
+  }
+  
+  /* Button styles */
+  .btn {
+    @apply px-3 py-1.5 rounded text-sm font-medium transition-all duration-200;
+  }
+  
+  .btn-primary {
+    @apply bg-obsidian-accent text-white hover:bg-opacity-90;
+  }
+  
+  .btn-secondary {
+    @apply bg-obsidian-active text-obsidian-text hover:bg-obsidian-hover;
+  }
+  
+  /* Input styles */
+  .input {
+    @apply bg-obsidian-bg text-obsidian-text border border-obsidian-border rounded px-3 py-1.5 focus:border-obsidian-accent focus:outline-none transition-all duration-200;
+  }
+  
+  /* Card styles */
+  .card {
+    @apply bg-obsidian-active rounded-md border border-obsidian-border p-4 shadow-obsidian;
+  }
+  
+  /* Tooltip styles */
+  .tooltip {
+    @apply relative inline-block;
+  }
+  
+  .tooltip .tooltip-text {
+    @apply invisible absolute z-10 bg-obsidian-bg text-obsidian-text text-xs rounded py-1 px-2 bottom-full left-1/2 transform -translate-x-1/2 mb-1 whitespace-nowrap opacity-0 transition-opacity duration-200;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  }
+  
+  .tooltip:hover .tooltip-text {
+    @apply visible opacity-100;
+  }
+}
+

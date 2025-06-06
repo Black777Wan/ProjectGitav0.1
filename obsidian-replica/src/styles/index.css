@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://rsms.me/inter/inter.css');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg-color: #ffffff;
+  --sidebar-bg: #f8fafc;
+  --text-color: #1e293b;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --primary-color: #0ea5e9;
+  --primary-hover: #0284c7;
+  --success-color: #10b981;
+  --danger-color: #ef4444;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+  --code-bg: #f1f5f9;
+  --blockquote-border: #e2e8f0;
+  --blockquote-bg: #f8fafc;
+  --table-border: #e2e8f0;
+  --table-header-bg: #f1f5f9;
+  --table-row-hover: #f8fafc;
+}
+
+.dark {
+  --bg-color: #0f172a;
+  --sidebar-bg: #1e293b;
+  --text-color: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  --primary-color: #38bdf8;
+  --primary-hover: #7dd3fc;
+  --success-color: #34d399;
+  --danger-color: #f87171;
+  --warning-color: #fbbf24;
+  --info-color: #60a5fa;
+  --code-bg: #1e293b;
+  --blockquote-border: #334155;
+  --blockquote-bg: #1e293b;
+  --table-border: #334155;
+  --table-header-bg: #1e293b;
+  --table-row-hover: #1e293b;
+}
+
+/* Base styles */
+body {
+  @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+  font-feature-settings: 'rlig' 1, 'calt' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-500;
+}
+
+/* Selection */
+::selection {
+  @apply bg-primary-100 dark:bg-primary-900 text-primary-900 dark:text-primary-100;
+}
+
+/* Typography */
+.prose {
+  @apply max-w-none;
+}
+
+.prose :where(h1, h2, h3, h4, h5, h6):not(:where([class~='not-prose'] *)) {
+  @apply text-gray-900 dark:text-white font-semibold mt-8 mb-4;
+}
+
+.prose :where(p):not(:where([class~='not-prose'] *)) {
+  @apply my-4 leading-relaxed;
+}
+
+.prose :where(a):not(:where([class~='not-prose'] *)) {
+  @apply text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline underline-offset-2 decoration-1 decoration-primary-300 dark:decoration-primary-600 hover:decoration-2 transition-colors duration-200;
+}
+
+/* Code blocks */
+.prose pre {
+  @apply bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto text-sm leading-relaxed;
+}
+
+.prose code {
+  @apply bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0 text-gray-200 dark:text-gray-200;
+}
+
+/* Blockquotes */
+.prose blockquote {
+  @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-700 dark:text-gray-300 my-4;
+}
+
+/* Tables */
+.prose table {
+  @apply w-full my-6 border-collapse;
+}
+
+.prose th {
+  @apply bg-gray-100 dark:bg-gray-800 font-semibold text-left px-4 py-2 border-b border-gray-200 dark:border-gray-700;
+}
+
+.prose td {
+  @apply px-4 py-2 border-b border-gray-200 dark:border-gray-700;
+}
+
+.prose tr:hover td {
+  @apply bg-gray-50 dark:bg-gray-800;
+}
+
+/* Lists */
+.prose ul,
+.prose ol {
+  @apply my-4 pl-6;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+
+.prose ol {
+  @apply list-decimal;
+}
+
+.prose li {
+  @apply my-1.5;
+}
+
+/* Images */
+.prose img {
+  @apply my-6 rounded-lg shadow-md;
+}
+
+/* Horizontal rule */
+.prose hr {
+  @apply my-8 border-t border-gray-200 dark:border-gray-700;
+}
