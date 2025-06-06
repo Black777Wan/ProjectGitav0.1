@@ -4,15 +4,15 @@ import React from 'react';
 import AudioBlockComponent from '../AudioBlockComponent';
 
 export interface AudioBlockPayload {
-  audioSrc: string;
+  audioFilePath: string; // Changed from audioSrc
   blockId: string;
-  startTime: number;
+  startTime: number; // startTime will be 0 for manually inserted full snippets
   recordingId: string;
 }
 
 export type SerializedAudioBlockNode = Spread<
   {
-    audioSrc: string;
+    audioFilePath: string; // Changed from audioSrc
     blockId: string;
     startTime: number;
     recordingId: string;
@@ -23,7 +23,7 @@ export type SerializedAudioBlockNode = Spread<
 >;
 
 export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
-  __audioSrc: string;
+  __audioFilePath: string; // Changed from __audioSrc
   __blockId: string;
   __startTime: number;
   __recordingId: string;
@@ -34,7 +34,7 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
 
   static clone(node: AudioBlockNode): AudioBlockNode {
     return new AudioBlockNode(
-      node.__audioSrc,
+      node.__audioFilePath, // Changed from node.__audioSrc
       node.__blockId,
       node.__startTime,
       node.__recordingId,
@@ -43,14 +43,14 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
   }
 
   constructor(
-    audioSrc: string,
+    audioFilePath: string, // Changed from audioSrc
     blockId: string,
     startTime: number,
     recordingId: string,
     key?: NodeKey
   ) {
     super(key);
-    this.__audioSrc = audioSrc;
+    this.__audioFilePath = audioFilePath; // Changed from __audioSrc = audioSrc
     this.__blockId = blockId;
     this.__startTime = startTime;
     this.__recordingId = recordingId;
@@ -67,14 +67,14 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
   }
 
   static importJSON(serializedNode: SerializedAudioBlockNode): AudioBlockNode {
-    const { audioSrc, blockId, startTime, recordingId } = serializedNode;
-    const node = new AudioBlockNode(audioSrc, blockId, startTime, recordingId);
+    const { audioFilePath, blockId, startTime, recordingId } = serializedNode; // Changed audioSrc
+    const node = new AudioBlockNode(audioFilePath, blockId, startTime, recordingId); // Changed audioSrc
     return node;
   }
 
   exportJSON(): SerializedAudioBlockNode {
     return {
-      audioSrc: this.__audioSrc,
+      audioFilePath: this.__audioFilePath, // Changed from audioSrc: this.__audioSrc
       blockId: this.__blockId,
       startTime: this.__startTime,
       recordingId: this.__recordingId,
@@ -86,9 +86,9 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
   decorate(): React.ReactNode {
     return (
       <AudioBlockComponent 
-        audioSrc={this.__audioSrc} 
+        audioFilePath={this.__audioFilePath} // Changed from audioSrc
         blockId={this.__blockId}
-        startTime={this.__startTime}
+        startTime={this.__startTime} // This will be 0 for manually inserted full audio files
         recordingId={this.__recordingId}
       />
     );
@@ -96,12 +96,12 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
 }
 
 export function $createAudioBlockNode(
-  audioSrc: string,
+  audioFilePath: string, // Changed from audioSrc
   blockId: string,
-  startTime: number,
+  startTime: number, // Should typically be 0 for new manual insertions
   recordingId: string
 ): AudioBlockNode {
-  return new AudioBlockNode(audioSrc, blockId, startTime, recordingId);
+  return new AudioBlockNode(audioFilePath, blockId, startTime, recordingId); // Changed audioSrc
 }
 
 export function $isAudioBlockNode(
