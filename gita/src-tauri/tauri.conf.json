@@ -1,56 +1,14 @@
 {
-  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/tooling/cli/schema.json",
-  "package": {
-    "productName": "Obsidian Replica",
-    "version": "0.1.0",
-    "identifier": "com.manus.obsidianreplica"
+  "productName": "Obsidian Replica",
+  "version": "0.1.0",
+  "identifier": "com.manus.obsidianreplica",
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
   },
-  "tauri": {
-    "build": {
-      "beforeDevCommand": "npm run dev",
-      "beforeBuildCommand": "npm run build",
-      "devPath": "http://localhost:1420",
-      "distDir": "../dist"
-    },
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "dialog": {
-        "all": true
-      },
-      "fs": {
-        "all": true,
-        "scope": ["$APP/*", "$DOCUMENT/*"]
-      },
-      "path": {
-        "all": true
-      },
-      "protocol": {
-        "asset": true,
-        "assetScope": ["$APP/*"]
-      }
-    },
-    "bundle": {
-      "active": true,
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "targets": "all",
-      "category": "Productivity"
-    },
-    "security": {
-      "csp": null
-    },
-    "updater": {
-      "active": false
-    },
+  "app": {
     "windows": [
       {
         "fullscreen": false,
@@ -61,6 +19,44 @@
         "minWidth": 800,
         "minHeight": 600
       }
-    ]
-  }
+    ],
+    "security": {
+      "csp": null,
+      "allowlist": {
+        "all": false,
+        "shell": {
+          "all": false,
+          "open": true
+        },
+        "dialog": {
+          "all": true
+        },
+        "fs": {
+          "all": true,
+          "scope": ["$APP/*", "$DOCUMENT/*"]
+        },
+        "path": {
+          "all": true
+        },
+        "protocol": {
+          "asset": true,
+          "assetScope": ["$APP/*"]
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {}
 }
