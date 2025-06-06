@@ -8,11 +8,11 @@
     font-size: 16px;
     line-height: 24px;
     font-weight: 400;
-    color-scheme: dark;
+    /* color-scheme: dark; Tailwind dark mode class will handle this */
   }
 
   body {
-    @apply bg-obsidian-bg text-obsidian-text m-0 p-0 min-h-screen;
+    @apply bg-light-bg dark:bg-obsidian-bg text-light-text dark:text-obsidian-text m-0 p-0 min-h-screen;
     font-feature-settings: "liga" 1, "calt" 1;
   }
 
@@ -23,20 +23,21 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-obsidian-bg;
+    @apply bg-light-bg dark:bg-obsidian-bg; /* Theme aware scrollbar track */
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-obsidian-border rounded-full;
+    @apply bg-light-border dark:bg-obsidian-border rounded-full; /* Theme aware scrollbar thumb */
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-obsidian-muted;
+    @apply bg-light-muted dark:bg-obsidian-muted; /* Theme aware scrollbar thumb hover */
   }
   
   /* Focus styles */
   *:focus-visible {
-    @apply outline-none ring-2 ring-obsidian-accent ring-opacity-70;
+    /* Consider making ring color theme-aware if light/dark accents differ significantly */
+    @apply outline-none ring-2 ring-light-accent dark:ring-obsidian-accent ring-opacity-70;
   }
   
   /* Transitions */
@@ -47,27 +48,29 @@
 
 @layer components {
   .sidebar-item {
-    @apply flex items-center px-3 py-2 text-sm text-obsidian-text hover:bg-obsidian-hover rounded cursor-pointer transition-all duration-200;
+    @apply flex items-center px-3 py-2 text-sm text-light-text dark:text-obsidian-text hover:bg-light-hover dark:hover:bg-obsidian-hover rounded cursor-pointer transition-all duration-200;
   }
 
   .sidebar-item.active {
-    @apply bg-obsidian-active text-obsidian-accent;
+    @apply bg-light-active dark:bg-obsidian-active text-light-accent dark:text-obsidian-accent;
   }
 
   .note-list-item {
-    @apply px-3 py-2 hover:bg-obsidian-hover cursor-pointer border-b border-obsidian-border transition-all duration-200;
+    @apply px-3 py-2 hover:bg-light-hover dark:hover:bg-obsidian-hover cursor-pointer border-b border-light-border dark:border-obsidian-border transition-all duration-200;
   }
 
   .note-list-item.active {
-    @apply bg-obsidian-active border-l-2 border-l-obsidian-accent;
+    @apply bg-light-active dark:bg-obsidian-active border-l-2 border-l-light-accent dark:border-l-obsidian-accent;
   }
 
   .editor-container {
-    @apply p-4 h-full overflow-auto;
+    /* Usually the editor itself will have a background, but parent container can be themed */
+    @apply p-4 h-full overflow-auto bg-light-bg dark:bg-obsidian-bg;
   }
 
   .audio-button {
-    @apply inline-flex items-center justify-center w-5 h-5 rounded-full bg-obsidian-accent text-white hover:bg-opacity-80 focus:outline-none transition-all duration-200;
+    /* Assuming accent is the primary color for this button */
+    @apply inline-flex items-center justify-center w-5 h-5 rounded-full bg-light-accent dark:bg-obsidian-accent text-white hover:bg-opacity-80 focus:outline-none transition-all duration-200;
   }
   
   /* Button styles */
@@ -76,21 +79,24 @@
   }
   
   .btn-primary {
-    @apply bg-obsidian-accent text-white hover:bg-opacity-90;
+    /* Assuming accent is used for primary buttons, text should be contrasting (likely white or very dark) */
+    /* If light-accent is dark, text might be light. If light-accent is light, text might be dark. */
+    /* For simplicity, assuming accent colors are dark enough for light text. */
+    @apply bg-light-accent dark:bg-obsidian-accent text-white hover:bg-opacity-90;
   }
   
   .btn-secondary {
-    @apply bg-obsidian-active text-obsidian-text hover:bg-obsidian-hover;
+    @apply bg-light-active dark:bg-obsidian-active text-light-text dark:text-obsidian-text hover:bg-light-hover dark:hover:bg-obsidian-hover;
   }
   
   /* Input styles */
   .input {
-    @apply bg-obsidian-bg text-obsidian-text border border-obsidian-border rounded px-3 py-1.5 focus:border-obsidian-accent focus:outline-none transition-all duration-200;
+    @apply bg-light-bg dark:bg-obsidian-bg text-light-text dark:text-obsidian-text border border-light-border dark:border-obsidian-border rounded px-3 py-1.5 focus:border-light-accent dark:focus:border-obsidian-accent focus:outline-none transition-all duration-200;
   }
   
   /* Card styles */
   .card {
-    @apply bg-obsidian-active rounded-md border border-obsidian-border p-4 shadow-obsidian;
+    @apply bg-light-active dark:bg-obsidian-active rounded-md border border-light-border dark:border-obsidian-border p-4 shadow-obsidian; /* Consider theme-aware shadow or removing if problematic */
   }
   
   /* Tooltip styles */
@@ -99,8 +105,12 @@
   }
   
   .tooltip .tooltip-text {
-    @apply invisible absolute z-10 bg-obsidian-bg text-obsidian-text text-xs rounded py-1 px-2 bottom-full left-1/2 transform -translate-x-1/2 mb-1 whitespace-nowrap opacity-0 transition-opacity duration-200;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    @apply invisible absolute z-10 bg-light-bg dark:bg-obsidian-bg text-light-text dark:text-obsidian-text text-xs rounded py-1 px-2 bottom-full left-1/2 transform -translate-x-1/2 mb-1 whitespace-nowrap opacity-0 transition-opacity duration-200;
+    /* Consider theme-aware shadow */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15); /* Softer shadow for light, dark could be different */
+  }
+  .dark .tooltip .tooltip-text { /* Dark mode specific shadow if needed */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
   
   .tooltip:hover .tooltip-text {
