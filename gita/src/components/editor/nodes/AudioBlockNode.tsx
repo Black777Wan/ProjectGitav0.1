@@ -4,18 +4,18 @@ import React from 'react';
 import AudioBlockComponent from '../AudioBlockComponent';
 
 export interface AudioBlockPayload {
-  audioSrc: string;
-  blockId: string;
-  startTime: number;
+  audioFilePath: string;
   recordingId: string;
+  startTime: number;
+  // blockId will be the node's own key
 }
 
 export type SerializedAudioBlockNode = Spread<
   {
-    audioSrc: string;
-    blockId: string;
-    startTime: number;
+    audioFilePath: string;
     recordingId: string;
+    startTime: number;
+    blockId: NodeKey; // blockId is the NodeKey
     type: 'audio-block';
     version: 1;
   },
@@ -23,37 +23,41 @@ export type SerializedAudioBlockNode = Spread<
 >;
 
 export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
-  __audioSrc: string;
-  __blockId: string;
-  __startTime: number;
+  __audioFilePath: string;
   __recordingId: string;
+  __startTime: number;
+  // __blockId will be this.getKey() implicitly, or store this.__key if needed for decoration access
+  // Let's explicitly store it for clarity in decorate and exportJSON if needed, though getKey() is canonical.
+  __blockId: NodeKey;
+
 
   static getType(): string {
     return 'audio-block';
   }
 
   static clone(node: AudioBlockNode): AudioBlockNode {
+    // Pass node.__key to ensure cloned node gets the same key if that's desired,
+    // or let Lexical assign a new key if node.__key is not passed.
+    // For true clone, pass the key.
     return new AudioBlockNode(
-      node.__audioSrc,
-      node.__blockId,
-      node.__startTime,
+      node.__audioFilePath,
       node.__recordingId,
-      node.__key
+      node.__startTime,
+      node.__key // Pass the original key for a true clone
     );
   }
 
   constructor(
-    audioSrc: string,
-    blockId: string,
-    startTime: number,
+    audioFilePath: string,
     recordingId: string,
+    startTime: number,
     key?: NodeKey
   ) {
     super(key);
-    this.__audioSrc = audioSrc;
-    this.__blockId = blockId;
-    this.__startTime = startTime;
+    this.__audioFilePath = audioFilePath;
     this.__recordingId = recordingId;
+    this.__startTime = startTime;
+    this.__blockId = this.getKey(); // Store the node's own key as its blockId
   }
 
   createDOM(config: EditorConfig): HTMLElement {
@@ -66,18 +70,30 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
     return false;
   }
 
+  // Method to get the internal blockId (which is its Lexical key)
+  getBlockId(): NodeKey {
+    return this.__blockId;
+  }
+
   static importJSON(serializedNode: SerializedAudioBlockNode): AudioBlockNode {
-    const { audioSrc, blockId, startTime, recordingId } = serializedNode;
-    const node = new AudioBlockNode(audioSrc, blockId, startTime, recordingId);
+    // blockId from JSON is used as the key for the new node
+    const node = new AudioBlockNode(
+      serializedNode.audioFilePath,
+      serializedNode.recordingId,
+      serializedNode.startTime,
+      serializedNode.blockId // Use blockId from JSON as the key
+    );
+    // Ensure __blockId is correctly set after construction if key is overridden
+    // In this constructor, this.__blockId = this.getKey() handles it.
     return node;
   }
 
   exportJSON(): SerializedAudioBlockNode {
     return {
-      audioSrc: this.__audioSrc,
-      blockId: this.__blockId,
-      startTime: this.__startTime,
+      audioFilePath: this.__audioFilePath,
       recordingId: this.__recordingId,
+      startTime: this.__startTime,
+      blockId: this.getKey(), // Use the node's actual key for serialization
       type: 'audio-block',
       version: 1,
     };
@@ -86,8 +102,8 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
   decorate(): React.ReactNode {
     return (
       <AudioBlockComponent 
-        audioSrc={this.__audioSrc} 
-        blockId={this.__blockId}
+        audioFilePath={this.__audioFilePath}
+        blockId={this.getKey()} // Pass the node's key as blockId to component
         startTime={this.__startTime}
         recordingId={this.__recordingId}
       />
@@ -96,12 +112,12 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
 }
 
 export function $createAudioBlockNode(
-  audioSrc: string,
-  blockId: string,
-  startTime: number,
-  recordingId: string
+  audioFilePath: string,
+  recordingId: string,
+  startTime: number
 ): AudioBlockNode {
-  return new AudioBlockNode(audioSrc, blockId, startTime, recordingId);
+  // blockId is not passed; it will be the node's own key.
+  return new AudioBlockNode(audioFilePath, recordingId, startTime);
 }
 
 export function $isAudioBlockNode(

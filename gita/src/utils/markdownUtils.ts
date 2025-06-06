@@ -1,4 +1,5 @@
-import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
+import { $getRoot, EditorState } from 'lexical';
+import { $convertFromMarkdownString, $convertToMarkdownString, TRANSFORMERS } from '@lexical/markdown';
 
 /**
  * Convert markdown text to Lexical editor state
@@ -8,18 +9,10 @@ import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
  */
 export function markdownToLexical(markdown: string): () => void {
   return () => {
-    const root = $getRoot();
-    const paragraphs = markdown.split('\n\n');
-    
-    // For simplicity, we'll just create paragraph nodes with text nodes
-    paragraphs.forEach((paragraph) => {
-      if (paragraph.trim() === '') return;
-      
-      const paragraphNode = $createParagraphNode();
-      const textNode = $createTextNode(paragraph);
-      paragraphNode.append(textNode);
-      root.append(paragraphNode);
-    });
+    // This function is executed by Lexical within an update cycle.
+    // $getRoot() and other $ prefixed functions are available.
+    $getRoot().clear(); // Clear previous content
+    $convertFromMarkdownString(markdown, TRANSFORMERS);
   };
 }
 
@@ -29,11 +22,7 @@ export function markdownToLexical(markdown: string): () => void {
  * @param editorState The Lexical editor state
  * @returns The markdown text
  */
-export function lexicalToMarkdown(editorState: any): string {
-  // This is a simplified implementation
-  // In a real app, you would traverse the editor state and convert it to markdown
-  
-  // For now, we'll just return a placeholder
-  return "# Placeholder\n\nThis is a placeholder for the markdown conversion.";
+export function lexicalToMarkdown(editorState: EditorState): string {
+  return editorState.read(() => $convertToMarkdownString(TRANSFORMERS));
 }
 

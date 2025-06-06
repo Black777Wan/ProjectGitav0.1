@@ -22,16 +22,14 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
 
   // Apply theme changes
   useEffect(() => {
-    // In a real implementation, this would update CSS variables or class names
-    // For now, we'll just save the preference
+    const root = window.document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    
-    // This is a placeholder for actual theme switching logic
-    console.log(`Theme switched to ${isDarkMode ? 'dark' : 'light'} mode`);
-    
-    // In a full implementation, we would update the document class or CSS variables
-    // document.documentElement.classList.toggle('dark-theme', isDarkMode);
-    // document.documentElement.classList.toggle('light-theme', !isDarkMode);
+    // console.log(`Theme switched to ${isDarkMode ? 'dark' : 'light'} mode, class 'dark' ${isDarkMode ? 'added' : 'removed'}`);
   }, [isDarkMode]);
 
   const toggleTheme = () => {
