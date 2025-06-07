@@ -6,10 +6,62 @@
 mod file_system;
 mod audio;
 mod db;
+pub mod dal_error;
+pub mod page_handler;
+pub mod block_handler;
+pub mod audio_handler;
+pub mod link_handler;
+use crate::link_handler; // Added this line
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
+use serde_json::Value;
+use uuid::Uuid;
+use crate::page_handler::Page as DalPage;
+use chrono::{DateTime, Utc};
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct CommandPageMetadata {
+    id: String,
+    title: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<DalPage> for CommandPageMetadata {
+    fn from(page: DalPage) -> Self {
+        CommandPageMetadata {
+            id: page.id.to_string(),
+            title: page.title,
+            created_at: page.created_at.to_rfc3339(),
+            updated_at: page.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct CommandPage {
+    id: String,
+    title: String,
+    content_json: Value,
+    raw_markdown: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<DalPage> for CommandPage {
+    fn from(page: DalPage) -> Self {
+        CommandPage {
+            id: page.id.to_string(),
+            title: page.title,
+            content_json: page.content_json,
+            raw_markdown: page.raw_markdown,
+            created_at: page.created_at.to_rfc3339(),
+            updated_at: page.updated_at.to_rfc3339(),
+        }
+    }
+}
 
 // Define a struct to hold the database connection
 struct AppState {
@@ -107,62 +159,172 @@ fn set_audio_directory(state: State<AppState>, path: &str) -> Result<(), String>
 
 // Command to get all notes
 #[tauri::command]
-fn get_all_notes(state: State<AppState>) -> Result<Vec<file_system::NoteMetadata>, String> {
-    let notes_dir_pathbuf = state.notes_dir.lock().map_err(|_| "Failed to acquire notes directory lock".to_string())?;
-    let notes_dir_str = notes_dir_pathbuf.to_str().ok_or_else(|| "Notes directory path is not valid UTF-8".to_string())?;
-    file_system::get_all_notes(notes_dir_str)
+async fn get_all_notes(state: State<'_, AppState>) -> Result<Vec<CommandPageMetadata>, String> {
+    let pages = page_handler::list_pages(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let result: Vec<CommandPageMetadata> = pages.into_iter().map(CommandPageMetadata::from).collect();
+    Ok(result)
 }
 
 // Command to search notes
 #[tauri::command]
-fn search_notes(state: State<AppState>, query: &str) -> Result<Vec<file_system::NoteMetadata>, String> {
-    let notes_dir_pathbuf = state.notes_dir.lock().map_err(|_| "Failed to acquire notes directory lock".to_string())?;
-    let notes_dir_str = notes_dir_pathbuf.to_str().ok_or_else(|| "Notes directory path is not valid UTF-8".to_string())?;
-    file_system::search_notes(notes_dir_str, query)
+async fn search_notes(state: State<'_, AppState>, query: String) -> Result<Vec<CommandPageMetadata>, String> {
+    let pages = page_handler::search_pages(&state.pool, &query)
+        .await
+        .map_err(|e| e.to_string())?;
+    let result: Vec<CommandPageMetadata> = pages.into_iter().map(CommandPageMetadata::from).collect();
+    Ok(result)
 }
 
-// Command to read a markdown file
+// New get_page_details function (replaces read_markdown_file)
 #[tauri::command]
-fn read_markdown_file(path: &str) -> Result<file_system::Note, String> {
-    file_system::read_markdown_file(path)
+async fn get_page_details(state: State<'_, AppState>, id: String) -> Result<CommandPage, String> {
+    let page_uuid = Uuid::parse_str(&id).map_err(|e| format!("Invalid page ID format: {}", e))?;
+    let page = page_handler::get_page(&state.pool, page_uuid)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Page with ID {} not found", id))?;
+    Ok(CommandPage::from(page))
 }
 
-// Command to write a markdown file
+// New update_page_content function (replaces write_markdown_file)
 #[tauri::command]
-fn write_markdown_file(path: &str, content: &str) -> Result<(), String> {
-    file_system::write_markdown_file(path, content)
+async fn update_page_content(
+    state: State<'_, AppState>,
+    id: String,
+    title: Option<String>,
+    raw_markdown: Option<String>,
+    content_json: Option<Value>, // Allow updating content_json too
+) -> Result<bool, String> {
+    let page_uuid = Uuid::parse_str(&id).map_err(|e| format!("Invalid page ID format: {}", e))?;
+
+    // Prepare Option<&str> for title and raw_markdown
+    let title_ref = title.as_deref();
+    // let raw_markdown_ref = raw_markdown.as_deref();
+
+    let updated = page_handler::update_page(
+        &state.pool,
+        page_uuid,
+        title_ref,
+        content_json, // Pass content_json directly
+        raw_markdown.map(Some), // If raw_markdown is Some(String), pass Some(Some(string_slice)). If None, pass None.
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(updated)
 }
 
 // Command to create a new note
 #[tauri::command]
-fn create_note(state: State<AppState>, title: &str, content: &str) -> Result<file_system::Note, String> {
-    let notes_dir_pathbuf = state.notes_dir.lock().map_err(|_| "Failed to acquire notes directory lock".to_string())?;
-    let notes_dir_str = notes_dir_pathbuf.to_str().ok_or_else(|| "Notes directory path is not valid UTF-8".to_string())?;
-    file_system::create_note(notes_dir_str, title, content)
+async fn create_note(
+    state: State<'_, AppState>,
+    title: String, // Changed from &str to String
+    content: String, // Changed from &str to String, assumed to be raw_markdown
+) -> Result<CommandPage, String> {
+    // For new notes, content_json could be empty or derived from raw_markdown.
+    // Here, we'll use a default empty JSON object.
+    // A more sophisticated approach might parse markdown to JSON.
+    let default_content_json = serde_json::json!({});
+
+    let new_page_id = page_handler::create_page(
+        &state.pool,
+        &title,
+        default_content_json.clone(), // Pass clone here
+        Some(&content),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Fetch the created page to return its full details
+    let new_page_details = page_handler::get_page(&state.pool, new_page_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Failed to retrieve newly created page".to_string())?;
+
+    Ok(CommandPage::from(new_page_details))
 }
 
 // Command to create a daily note
 #[tauri::command]
-fn create_daily_note(state: State<AppState>) -> Result<file_system::Note, String> {
-    let notes_dir_pathbuf = state.notes_dir.lock().map_err(|_| "Failed to acquire notes directory lock".to_string())?;
-    let notes_dir_str = notes_dir_pathbuf.to_str().ok_or_else(|| "Notes directory path is not valid UTF-8".to_string())?;
-    file_system::create_daily_note(notes_dir_str)
+async fn create_daily_note(state: State<'_, AppState>) -> Result<CommandPage, String> {
+    let today_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+    // Check if daily note already exists by title
+    let existing_pages = page_handler::search_pages(&state.pool, &today_str)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut daily_page: Option<DalPage> = None;
+    for page in existing_pages {
+        if page.title == today_str {
+            daily_page = Some(page);
+            break;
+        }
+    }
+
+    if let Some(page) = daily_page {
+        // If it exists, just return it
+        Ok(CommandPage::from(page))
+    } else {
+        // If not, create it
+        let default_content_json = serde_json::json!({
+            "type": "doc",
+            "content": [
+                { "type": "heading", "attrs": { "level": 1 }, "content": [{ "type": "text", "text": &today_str }] },
+                { "type": "paragraph" } // Add an empty paragraph
+            ]
+        });
+        let initial_markdown = format!("# {}
+
+", today_str);
+
+        let new_page_id = page_handler::create_page(
+            &state.pool,
+            &today_str,
+            default_content_json.clone(),
+            Some(&initial_markdown),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let new_page_details = page_handler::get_page(&state.pool, new_page_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Failed to retrieve newly created daily page".to_string())?;
+
+        Ok(CommandPage::from(new_page_details))
+    }
 }
 
 // Command to delete a note
 #[tauri::command]
-fn delete_note(state: State<AppState>, note_id: &str) -> Result<(), String> {
-    let notes_dir_pathbuf = state.notes_dir.lock().map_err(|_| "Failed to acquire notes directory lock".to_string())?;
-    let notes_dir_str = notes_dir_pathbuf.to_str().ok_or_else(|| "Notes directory path is not valid UTF-8".to_string())?;
-    file_system::delete_note(notes_dir_str, note_id)
+async fn delete_note(state: State<'_, AppState>, note_id: String) -> Result<bool, String> {
+    let page_uuid = Uuid::parse_str(&note_id).map_err(|e| format!("Invalid page ID format: {}", e))?;
+    page_handler::delete_page(&state.pool, page_uuid)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // Command to find backlinks for a note
 #[tauri::command]
-fn find_backlinks(state: State<AppState>, note_id: &str) -> Result<Vec<file_system::NoteMetadata>, String> {
-    let notes_dir_pathbuf = state.notes_dir.lock().map_err(|_| "Failed to acquire notes directory lock".to_string())?;
-    let notes_dir_str = notes_dir_pathbuf.to_str().ok_or_else(|| "Notes directory path is not valid UTF-8".to_string())?;
-    file_system::find_backlinks(notes_dir_str, note_id)
+async fn find_backlinks(state: State<'_, AppState>, note_id: String) -> Result<Vec<CommandPageMetadata>, String> {
+    let page_uuid = Uuid::parse_str(&note_id).map_err(|e| format!("Invalid page ID format: {}", e))?;
+
+    let links = link_handler::find_backlinks_for_page(&state.pool, page_uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut source_pages_metadata = Vec::new();
+    for link in links {
+        if let Ok(Some(page)) = page_handler::get_page(&state.pool, link.source_page_id).await {
+            source_pages_metadata.push(CommandPageMetadata::from(page));
+        }
+        // Optionally log if a source page isn't found
+    }
+    Ok(source_pages_metadata)
 }
 
 // Command to start recording
@@ -225,15 +387,15 @@ async fn main() {
             set_notes_directory,
             get_audio_directory,
             set_audio_directory,
-            get_all_notes,
-            search_notes,
-            read_markdown_file,
-            write_markdown_file,
-            create_note,
-            create_daily_note,
-            delete_note,
-            find_backlinks,
-            start_recording,
+            get_all_notes,      // Refactored
+            search_notes,     // Refactored
+            get_page_details, // New (was read_markdown_file)
+            update_page_content, // New (was write_markdown_file)
+            create_note,      // Refactored
+            create_daily_note, // Refactored
+            delete_note,      // Refactored
+            find_backlinks,   // Refactored
+            start_recording, // Keep existing audio commands
             stop_recording,
             get_audio_recordings,
             get_audio_block_references,
