@@ -152,7 +152,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
           <div className="editor-content">
             <RichTextPlugin
               contentEditable={<ContentEditable className="editor-input" />}
-              placeholder={<div className="editor-placeholder">Start typing...</div>}
+              placeholder={<div className="editor-placeholder">start typing</div>}
               ErrorBoundary={LexicalErrorBoundary}
             />
             <HistoryPlugin />

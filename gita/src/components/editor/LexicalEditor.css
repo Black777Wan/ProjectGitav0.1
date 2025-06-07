@@ -31,7 +31,7 @@
 }
 
 .editor-placeholder {
-  color: #666;
+  color: #AAAAAA;
   overflow: hidden;
   position: absolute;
   text-overflow: ellipsis;
@@ -124,21 +124,21 @@
 
 .editor-listitem {
   position: relative;
-  padding-left: 20px;
+  padding-left: 16px;
   margin: 2px 0;
   min-height: 24px;
   line-height: 1.6;
 }
 
 .editor-listitem::before {
-  content: '•';
+  content: '-';
   position: absolute;
   left: 0;
-  top: 0;
+  top: 0.1em; /* Adjusted for hyphen alignment */
   color: #7F6DF2;
-  font-size: 14px;
+  font-size: 14px; /* Consider adjusting if hyphen looks too small/large */
   line-height: 1.6;
-  font-weight: bold;
+  font-weight: normal; /* Hyphens are usually not bold */
   width: 16px;
   text-align: center;
 }
@@ -146,18 +146,18 @@
 /* Nested list styling with hierarchy lines */
 .editor-nested-listitem {
   position: relative;
-  margin-left: 20px;
+  margin-left: 16px;
 }
 
 .editor-nested-listitem::after {
   content: '';
   position: absolute;
-  left: -10px;
+  left: -8px; /* Adjusted to align with parent bullet (16px margin - 8px) */
   top: 0;
   bottom: 0;
   width: 1px;
-  background-color: #7F6DF2;
-  opacity: 0.3;
+  background-color: #555555; /* More subtle color */
+  opacity: 0.4; /* Slightly increased opacity */
 }
 
 /* Different bullet styles for different nesting levels */
