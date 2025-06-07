@@ -19,7 +19,7 @@ import { invoke } from "@tauri-apps/api/tauri";
 import { v4 as uuidv4 } from "uuid";
 import { useAudioRecordingStore } from "../../stores/audioRecordingStore";
 import { useEffect, useRef } from "react"; // Keep from jules_wip (useState removed)
-import { getAudioDirectory } from '../../../api/fileSystem'; // Keep from jules_wip
+import { getAudioDirectory } from '../../api/fileSystem'; // Keep from jules_wip
 import {
   FORMAT_TEXT_COMMAND,
   $getSelection,

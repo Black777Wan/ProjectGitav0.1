@@ -1,5 +1,5 @@
   import React, { useState, useEffect, useRef } from 'react'; // Added useRef
-import { convertFileSrc } from '@tauri-apps/api/tauri';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import AudioPlayer from '../AudioPlayer';
 import { FiPlay, FiLoader, FiAlertTriangle } from 'react-icons/fi'; // From jules_wip
 

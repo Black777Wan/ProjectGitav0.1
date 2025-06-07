@@ -3,7 +3,7 @@ import { FiClock, FiPlay, FiTrash2, FiLoader, FiAlertTriangle } from 'react-icon
 import { AudioRecording } from '../types';
 import { getAudioRecordings } from '../api/audio';
 import AudioPlayer from './AudioPlayer';
-import { convertFileSrc } from '@tauri-apps/api/tauri'; // Kept import
+import { convertFileSrc } from '@tauri-apps/api/core'; // Kept import
 
 // --- PlayableAudioItem Sub-component (from jules_wip) ---
 interface PlayableAudioItemProps {
