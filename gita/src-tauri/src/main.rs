@@ -5,33 +5,32 @@
 
 mod file_system;
 mod audio;
+mod db;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
-use rusqlite::Connection;
 
 // Define a struct to hold the database connection
 struct AppState {
-    db_conn: Mutex<Connection>,
+    pool: sqlx::PgPool,
     notes_dir: Mutex<PathBuf>,
     audio_dir: Mutex<PathBuf>,
 }
 
 // Initialize the app state
-fn init_app_state(app_handle: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
+async fn init_app_state(app_handle: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
     // Get the app data directory
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {}", e))?;
-    let db_path = app_data_dir.join("gita_db.sqlite");
     
     // Create the app data directory if it doesn't exist
     std::fs::create_dir_all(&app_data_dir)?;
     
     // Initialize the database
-    let db_conn = file_system::init_database(&app_data_dir)?;
+    let pool = db::init_pool().await?;
     
     // Set default notes and audio directories
     let notes_dir = app_data_dir.join("notes");
@@ -42,7 +41,7 @@ fn init_app_state(app_handle: &AppHandle) -> Result<AppState, Box<dyn std::error
     std::fs::create_dir_all(&audio_dir)?;
     
     Ok(AppState {
-        db_conn: Mutex::new(db_conn),
+        pool,
         notes_dir: Mutex::new(notes_dir),
         audio_dir: Mutex::new(audio_dir),
     })
@@ -177,22 +176,25 @@ fn start_recording(state: State<AppState>, note_id: &str, recording_id: &str) ->
 // Command to stop recording
 #[tauri::command]
 fn stop_recording(state: State<AppState>, recording_id: &str) -> Result<audio::AudioRecording, String> {
-    let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
-    audio::stop_recording(recording_id, &db_conn)
+    // let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
+    // audio::stop_recording(recording_id, &db_conn)
+    Err("Database functionality is temporarily disabled".to_string())
 }
 
 // Command to get audio recordings for a note
 #[tauri::command]
 fn get_audio_recordings(state: State<AppState>, note_id: &str) -> Result<Vec<audio::AudioRecording>, String> {
-    let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
-    audio::get_audio_recordings(note_id, &db_conn)
+    // let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
+    // audio::get_audio_recordings(note_id, &db_conn)
+    Err("Database functionality is temporarily disabled".to_string())
 }
 
 // Command to get audio block references for a recording
 #[tauri::command]
 fn get_audio_block_references(state: State<AppState>, recording_id: &str) -> Result<Vec<audio::AudioBlockReference>, String> {
-    let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
-    audio::get_audio_block_references(recording_id, &db_conn)
+    // let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
+    // audio::get_audio_block_references(recording_id, &db_conn)
+    Err("Database functionality is temporarily disabled".to_string())
 }
 
 // Command to create an audio block reference
@@ -203,18 +205,22 @@ fn create_audio_block_reference(
     block_id: &str,
     audio_offset_ms: u64
 ) -> Result<audio::AudioBlockReference, String> {
-    let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
-    audio::create_audio_block_reference(recording_id, block_id, audio_offset_ms, &db_conn)
+    // let db_conn = state.db_conn.lock().map_err(|_| "Failed to acquire database connection lock".to_string())?;
+    // audio::create_audio_block_reference(recording_id, block_id, audio_offset_ms, &db_conn)
+    Err("Database functionality is temporarily disabled".to_string())
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            // Initialize the app state
-            let app_state = init_app_state(&app.app_handle())?;
-            app.manage(app_state);
-            Ok(())
-        })        .invoke_handler(tauri::generate_handler![
+            Box::pin(async move {
+                let app_state = init_app_state(&app.app_handle()).await?;
+                app.manage(app_state);
+                Ok(())
+            })
+        })
+        .invoke_handler(tauri::generate_handler![
             get_notes_directory,
             set_notes_directory,
             get_audio_directory,
