@@ -28,28 +28,31 @@ pub struct AudioTimestamp {
 
 pub async fn create_audio_recording(
     pool: &PgPool,
+    id: Uuid, // <<<< ADDED ID PARAMETER
     page_id: Option<Uuid>,
     file_path: &str,
     mime_type: Option<&str>,
     duration_ms: Option<i32>,
-) -> Result<Uuid, DalError> {
-    let new_id = Uuid::new_v4();
-    let query_result = sqlx::query!(
+) -> Result<Uuid, DalError> { // Still returns Uuid (the one passed in)
+    // LET new_id = Uuid::new_v4(); // <<<< REMOVED
+    sqlx::query!(
         r#"
         INSERT INTO audio_recordings (id, page_id, file_path, mime_type, duration_ms, created_at)
         VALUES ($1, $2, $3, $4, $5, now())
+        -- No RETURNING id needed if we assume the passed id is used,
+        -- but to confirm insertion or for consistency:
         RETURNING id
         "#,
-        new_id,
+        id, // <<<< USE PROVIDED ID
         page_id,
         file_path,
         mime_type,
         duration_ms
     )
-    .fetch_one(pool)
+    .fetch_one(pool) // fetch_one to ensure it was inserted and to get the ID back (even if it's the same)
     .await?;
 
-    Ok(query_result.id)
+    Ok(id) // Return the ID that was passed in and inserted
 }
 
 pub async fn get_audio_recording(pool: &PgPool, id: Uuid) -> Result<Option<AudioRecording>, DalError> {
