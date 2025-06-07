@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, Result as SqliteResult};
 use walkdir::WalkDir;
 use regex::Regex;
 use serde_yaml;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NoteMetadata {
@@ -172,129 +173,152 @@ pub fn search_notes(notes_dir: &str, query: &str) -> Result<Vec<NoteMetadata>, S
 
 // Read a markdown file
 pub fn read_markdown_file(path: &str) -> Result<Note, String> {
-    // Read the file content
-    let mut file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
-    let mut content = String::new();
-    file.read_to_string(&mut content).map_err(|e| format!("Failed to read file: {}", e))?;
-    
-    // Extract front matter and content
-    let (front_matter, content) = extract_front_matter(&content);
-    
-    // Parse front matter
-    let front_matter: NoteFrontMatter = front_matter
-        .map(|fm_str| serde_yaml::from_str(&fm_str).unwrap_or_else(|err| {
-            eprintln!("Failed to parse front matter YAML for file {}: {}", path, err);
-            NoteFrontMatter {
-                id: None,
-                title: None,
-                created_at: None,
-                updated_at: None,
-                tags: None,
+    let mut file = File::open(path).map_err(|e| format!("Failed to open file {}: {}", path, e))?;
+    let mut raw_content_string = String::new();
+    file.read_to_string(&mut raw_content_string).map_err(|e| format!("Failed to read file {}: {}", path, e))?;
+
+    let (fm_str_opt, content_after_fm) = extract_front_matter(&raw_content_string);
+
+    let mut parsed_fm: NoteFrontMatter = fm_str_opt
+        .map_or_else(
+            || {
+                // No front matter block found, use default.
+                Ok(NoteFrontMatter::default())
+            },
+            |fm_str| {
+                serde_yaml::from_str(&fm_str).map_err(|err| {
+                    eprintln!("Failed to parse front matter YAML for file {}: {}. New front matter values will be used or generated.", path, err);
+                    err // Return the error to indicate parsing failure
+                })
             }
-        }))
-        .unwrap_or_else(|| NoteFrontMatter {
-            id: None,
-            title: None,
-            created_at: None,
-            updated_at: None,
-            tags: None,
-        });
+        )
+        .unwrap_or_else(|_| NoteFrontMatter::default()); // If parsing fails (error returned from map_err), use default.
+
+    // ID Handling: Use FM ID if present, otherwise generate a new one.
+    let id = parsed_fm.id.take().unwrap_or_else(|| {
+        let new_id = format!("note_{}", Uuid::new_v4());
+        println!("INFO: Generated new ID {} for note {}", new_id, path);
+        new_id
+    });
+
+    // File system metadata as a fallback for timestamps
+    let fs_metadata_result = fs::metadata(path);
+
+    // created_at Timestamp Prioritization
+    let created_at_str = parsed_fm.created_at.take().map_or_else(
+        || { // No created_at in FM
+            fs_metadata_result.as_ref()
+                .ok()
+                .and_then(|meta| meta.created().ok())
+                .map(|time| DateTime::<Utc>::from(time).format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                .unwrap_or_else(|| Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        },
+        |fm_created_at_str| { // created_at found in FM
+            DateTime::parse_from_rfc3339(&fm_created_at_str)
+                .map(|dt| dt.with_timezone(&Utc).format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                .unwrap_or_else(|parse_err| {
+                    println!("WARN: Invalid created_at format in front matter for {}: '{}'. Error: {}. Falling back to FS metadata or now().", path, fm_created_at_str, parse_err);
+                    fs_metadata_result.as_ref()
+                        .ok()
+                        .and_then(|meta| meta.created().ok())
+                        .map(|time| DateTime::<Utc>::from(time).format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                        .unwrap_or_else(|| Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                })
+        }
+    );
+
+    // updated_at Timestamp Prioritization
+    let updated_at_str = parsed_fm.updated_at.take().map_or_else(
+        || { // No updated_at in FM
+            fs_metadata_result.as_ref()
+                .ok()
+                .and_then(|meta| meta.modified().ok())
+                .map(|time| DateTime::<Utc>::from(time).format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                .unwrap_or_else(|| Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        },
+        |fm_updated_at_str| { // updated_at found in FM
+            DateTime::parse_from_rfc3339(&fm_updated_at_str)
+                .map(|dt| dt.with_timezone(&Utc).format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                .unwrap_or_else(|parse_err| {
+                    println!("WARN: Invalid updated_at format in front matter for {}: '{}'. Error: {}. Falling back to FS metadata or now().", path, fm_updated_at_str, parse_err);
+                    fs_metadata_result.as_ref()
+                        .ok()
+                        .and_then(|meta| meta.modified().ok())
+                        .map(|time| DateTime::<Utc>::from(time).format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                        .unwrap_or_else(|| Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                })
+        }
+    );
     
-    // Get file metadata
-    let metadata = fs::metadata(path).map_err(|e| format!("Failed to get file metadata: {}", e))?;
-    let created_at = metadata.created()
-        .map(|time| {
-            let datetime: DateTime<Utc> = time.into();
-            datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
-        })
-        .unwrap_or_else(|_| Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
-    
-    let updated_at = metadata.modified()
-        .map(|time| {
-            let datetime: DateTime<Utc> = time.into();
-            datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
-        })
-        .unwrap_or_else(|_| Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
-    
-    // Extract title from content if not in front matter
-    let title = front_matter.title.unwrap_or_else(|| {
-        // Try to extract title from first heading
+    // Title Handling (Front Matter > H1 > Filename)
+    let title = parsed_fm.title.take().unwrap_or_else(|| {
         let re = Regex::new(r"^#\s+(.+)$").unwrap();
-        content.lines()
-            .find_map(|line| re.captures(line).map(|cap| cap[1].to_string()))
+        content_after_fm.lines()
+            .find_map(|line| re.captures(line).map(|cap| cap[1].trim().to_string()))
+            .filter(|t| !t.is_empty())
             .unwrap_or_else(|| {
-                // Use filename as title if no heading found
                 Path::new(path)
                     .file_stem()
                     .and_then(|s| s.to_str())
-                    .unwrap_or("Untitled Note")
-                    .to_string()
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "Untitled Note".to_string())
             })
     });
     
-    // Generate ID if not in front matter
-    let id = front_matter.id.unwrap_or_else(|| {
-        format!("note_{}", chrono::Utc::now().timestamp_millis())
-    });
-    
-    // Use front matter dates if available
-    let created_at = front_matter.created_at.unwrap_or(created_at);
-    let updated_at = front_matter.updated_at.unwrap_or(updated_at);
-    
-    // Use front matter tags if available
-    let tags = front_matter.tags.unwrap_or_else(Vec::new);
+    // Tags Handling: Use FM tags if present, otherwise default to empty Vec.
+    let tags = parsed_fm.tags.take().unwrap_or_else(Vec::new);
     
     Ok(Note {
         id,
         title,
         path: path.to_string(),
-        content: content.to_string(),
-        created_at,
-        updated_at,
+        content: content_after_fm.to_string(),
+        created_at: created_at_str,
+        updated_at: updated_at_str,
         tags,
     })
 }
 
 // Write a markdown file
 pub fn write_markdown_file(path: &str, content: &str) -> Result<(), String> {
-    // Extract front matter and content
-    let (front_matter, content_without_fm) = extract_front_matter(content);
-    
-    // Parse front matter or create new one
-    let mut front_matter_data: NoteFrontMatter = front_matter
-        .map(|fm_str| serde_yaml::from_str(&fm_str).unwrap_or_else(|err| {
-            eprintln!("Failed to parse front matter YAML for file being written {}: {}", path, err);
-            NoteFrontMatter {
-                id: None,
-                title: None,
-                created_at: None,
-                updated_at: None,
-                tags: None,
-            }
-        }))
-        .unwrap_or_else(|| NoteFrontMatter {
-            id: None,
-            title: None,
-            created_at: None,
-            updated_at: None,
-            tags: None,
+    let (fm_str_opt, content_without_fm) = extract_front_matter(content);
+
+    let mut front_matter_data: NoteFrontMatter = fm_str_opt
+        .map_or_else(
+            || Ok(NoteFrontMatter::default()), // No FM block, start with default
+            |fm_str| serde_yaml::from_str(&fm_str)
+        )
+        .unwrap_or_else(|err| {
+            eprintln!("WARN: Failed to parse existing front matter for {}: {}. New front matter will be generated/augmented.", path, err);
+            NoteFrontMatter::default()
         });
     
-    // Update the updated_at timestamp
-    front_matter_data.updated_at = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+    // Augment Front Matter Data
+    if front_matter_data.id.is_none() {
+        front_matter_data.id = Some(format!("note_{}", Uuid::new_v4()));
+         println!("INFO: Generated new ID {:?} for note being written to {}", front_matter_data.id.as_ref().unwrap(), path);
+    }
     
-    // Extract title from content if not in front matter
     if front_matter_data.title.is_none() {
         let re = Regex::new(r"^#\s+(.+)$").unwrap();
         front_matter_data.title = content_without_fm.lines()
-            .find_map(|line| re.captures(line).map(|cap| cap[1].to_string()));
+            .find_map(|line| re.captures(line).map(|cap| cap[1].trim().to_string()))
+            .filter(|t| !t.is_empty());
+    }
+
+    if front_matter_data.created_at.is_none() {
+        front_matter_data.created_at = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+    }
+
+    // Ensure tags field is present (as `tags: []` if none were there)
+    if front_matter_data.tags.is_none() {
+        front_matter_data.tags = Some(Vec::new());
     }
     
-    // Generate ID if not in front matter
-    if front_matter_data.id.is_none() {
-        front_matter_data.id = Some(format!("note_{}", chrono::Utc::now().timestamp_millis()));
-    }
-    
+    // Always update the updated_at timestamp
+    front_matter_data.updated_at = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+
     // Serialize front matter
     let front_matter_yaml = serde_yaml::to_string(&front_matter_data)
         .map_err(|e| format!("Failed to serialize front matter: {}", e))?;
@@ -335,7 +359,7 @@ pub fn create_note(notes_dir: &str, title: &str, content: &str) -> Result<Note, 
         title: Some(title.to_string()),
         created_at: Some(now.clone()),
         updated_at: Some(now.clone()),
-        tags: Some(Vec::new()),
+            tags: Some(Vec::new()), // Default to empty vec for new notes
     };
     
     // Serialize front matter
@@ -444,17 +468,26 @@ pub fn find_backlinks(notes_dir: &str, note_id: &str) -> Result<Vec<NoteMetadata
 
 // Helper function to extract front matter from markdown content
 fn extract_front_matter(content: &str) -> (Option<String>, &str) {
-    // Check if the content starts with front matter delimiters
-    if content.starts_with("---") {
-        // Find the end of the front matter
-        if let Some(end_index) = content[3..].find("---") {
-            let front_matter = &content[3..end_index + 3];
-            let remaining_content = &content[end_index + 6..]; // Skip the second "---" and the following newline
-            return (Some(front_matter.to_string()), remaining_content);
+    let front_matter_regex = Regex::new(r"^(?s)---\s*\n(.*?)\n---\s*\n?(.*)$").unwrap();
+    if let Some(caps) = front_matter_regex.captures(content) {
+        let fm_str = caps.get(1).map_or("", |m| m.as_str()).trim();
+        let rest_content = caps.get(2).map_or("", |m| m.as_str());
+        (Some(fm_str.to_string()), rest_content)
+    } else {
+        (None, content)
+    }
+}
+
+// Implement Default for NoteFrontMatter
+impl Default for NoteFrontMatter {
+    fn default() -> Self {
+        NoteFrontMatter {
+            id: None,
+            title: None,
+            created_at: None,
+            updated_at: None,
+            tags: None,
         }
     }
-    
-    // No front matter found
-    (None, content)
 }
 
