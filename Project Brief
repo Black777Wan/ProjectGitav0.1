@@ -1,1 +1,107 @@
 You're the best coder and UI UX designer in the world! --- I want to create a Obsidian replica - an app with a markdown editor, bullets, hierarchies, page and block hierarchies, daily notes, page backlinks, block references. Use local markdown files for storing. I additionally want to have a audio recording feature (exactly how OBS does it - recording audio from the mic as well as the audio coming from the desktop. system and works seamlessly as the output/ input devices change), now this audio must also be stored in the database and must me tagged to the page it was written in, additionally, the exact audio timestamp must be tagged to the block (determined by the bullet hierarchy) from when the bullet/ block was created - so ultimately I should have a small play button next to the bullet to play the audio from wherever that particular block was made.; the audio functionality I described is currently there in microsoft's one note. A couple of additional things - keep the UI clean and modern (replicate Obsidian's beautiful clean UI), don't have to do any of the authentication things, can be a single user environment.Preferred stack UI - React, Tauri, Tailwind; Audio recorder Rust (CPAL) or FFmpeg backend; Playback HTML5 audio + timestamp; Packaging - Tauri desktop app; Editor - Lexical. Output should be the complete codebase that I can download locally and begin execution.  Every line of code should be complete and production ready! If you fail, you DIE
+
+
+Black777Wan
+I need to make a mojor chang to the backend - I want it to be a postgres SQL sever that will save all the metadata including the markdown note data in JSON format in the database. Note, here each page, each bullet, each sub bullet hierarchies will have their unique IDs. Give me the exact changes to be made in phases. You have teams with the best coders in the world - give a detailed plan. Sharing the overall project brief again for your reference --- You're the best coder and UI UX designer in the world! I want to create a Obsidian replica - an app with a markdown editor, bullets, hierarchies, page and block hierarchies, daily notes, page backlinks, block references. Use local markdown files for storing. I additionally want to have a audio recording feature (exactly how OBS does it - recording audio from the mic as well as the audio coming from the desktop. system and works seamlessly as the output/ input devices change), now this audio must also be stored in the database and must me tagged to the page it was written in, additionally, the exact audio timestamp must be tagged to the block (determined by the bullet hierarchy) from when the bullet/ block was created - so ultimately I should have a small play button next to the bullet to play the audio from wherever that particular block was made.; the audio functionality I described is currently there in microsoft's one note. A couple of additional things - keep the UI clean and modern (replicate Obsidian's beautiful clean UI), don't have to do any of the authentication things, can be a single user environment.Preferred stack UI - React, Tauri, Tailwind; Audio recorder Rust (CPAL) or FFmpeg backend; Playback HTML5 audio + timestamp; Packaging - Tauri desktop app; Editor - Lexical. Output should be the complete codebase that I can download locally and begin execution. Every line of code should be complete and production ready! If you fail, you DIE
+
+
+
+I am transitioning your backend from SQLite and local Markdown files to a PostgreSQL server for storing note data (as JSON) and all metadata is a significant undertaking. Here's a phased plan your team can follow:
+
+Phase 1: Backend - PostgreSQL Setup, Schema Design, and Rust Integration
+
+Setup PostgreSQL:
+
+Install and configure a PostgreSQL server instance (locally for development, and plan for deployment).
+Create a new database for the application.
+Create a dedicated user with appropriate permissions for the application.
+Database Schema Design (PostgreSQL):
+
+notes Table:
+id: UUID PRIMARY KEY (generate in Rust or use gen_random_uuid())
+title: TEXT NOT NULL
+content: JSONB (to store the Lexical editor state directly)
+created_at: TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+updated_at: TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+Consider adding a user_id if multi-user is ever a future possibility.
+blocks Table (for explicit block tracking, if needed beyond Lexical's structure):
+id: UUID PRIMARY KEY (Lexical node key can be used if stable and unique across notes)
+note_id: UUID REFERENCES notes(id) ON DELETE CASCADE
+parent_id: UUID REFERENCES blocks(id) ON DELETE CASCADE NULLABLE (for hierarchy)
+type: TEXT NOT NULL (e.g., 'paragraph', 'heading', 'list-item', 'audio-block')
+lexical_key: TEXT UNIQUE (store the Lexical node's key)
+created_at: TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+This table allows querying blocks directly, e.g., for block references.
+audio_recordings Table:
+id: UUID PRIMARY KEY
+note_id: UUID REFERENCES notes(id) ON DELETE CASCADE
+file_path: TEXT NOT NULL (audio files still stored on disk)
+duration_ms: BIGINT NOT NULL
+recorded_at: TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+audio_block_references Table:
+id: UUID PRIMARY KEY
+recording_id: UUID REFERENCES audio_recordings(id) ON DELETE CASCADE
+block_lexical_key: TEXT NOT NULL (references blocks.lexical_key or directly a key within the note's JSONB content)
+audio_offset_ms: BIGINT NOT NULL
+tags Table:
+id: SERIAL PRIMARY KEY
+name: TEXT UNIQUE NOT NULL
+note_tags Table (Join Table):
+note_id: UUID REFERENCES notes(id) ON DELETE CASCADE
+tag_id: INTEGER REFERENCES tags(id) ON DELETE CASCADE
+PRIMARY KEY (note_id, tag_id)
+Create indexes on foreign keys, updated_at fields, and any fields frequently used in WHERE clauses (e.g., notes.title, blocks.lexical_key).
+Rust Backend Changes (Tauri - main.rs, audio.rs, file_system.rs):
+
+Add a PostgreSQL Rust crate like sqlx or tokio-postgres to Cargo.toml in src-tauri.
+Modify AppState in main.rs to hold a PostgreSQL connection pool (e.g., sqlx::PgPool).
+Update the init_app_state function to establish the connection pool to PostgreSQL using environment variables or a configuration file for connection details.
+Remove rusqlite dependency and all SQLite-specific code.
+
+
+
+
+
+Phase 2: Backend - CRUD Operations for Notes & Blocks
+
+Rewrite Tauri Commands:
+
+Update all commands in main.rs and their corresponding helper functions (previously in file_system.rs, now more general DB interaction modules).
+Notes:
+create_note: Takes title and initial Lexical JSON content. Inserts into notes.
+read_note: Fetches a note by ID, returning its title and Lexical JSON content.
+write_note (Save Note): Takes note ID and new Lexical JSON content. Updates the notes table.
+delete_note: Deletes a note by ID. PostgreSQL ON DELETE CASCADE will handle related data in audio_recordings, note_tags, etc.
+get_all_notes: Queries the notes table for metadata (id, title, updated_at).
+search_notes: Implements full-text search on notes.title and potentially on notes.content (JSONB operators or a dedicated search index).
+Blocks (if blocks table is implemented):
+When saving a note, parse the Lexical JSON. For each relevant block (e.g., list items, custom nodes), extract its key, type, and parent relationship, then INSERT or UPDATE the blocks table. This is complex and requires careful handling of the Lexical structure.
+Alternatively, block references can be resolved by querying the JSONB content of notes directly if performance allows.
+Tags: Implement commands for adding/removing tags from notes and listing notes by tag.
+Data Migration (Critical):
+
+Develop a one-time migration script (Rust or other) to:
+Read all existing Markdown files.
+Convert Markdown content to Lexical JSON format (this might require a headless Lexical instance or a robust Markdown-to-Lexical JSON converter).
+Extract metadata from the old SQLite database.
+Insert the migrated data into the new PostgreSQL tables, ensuring IDs and relationships are correctly established.
+Phase 3: Backend - Audio and References Update
+
+Modify Audio-Related Tauri Commands:
+start_recording, stop_recording (audio.rs, gita/src-tauri/src/main.rs): Ensure audio_recordings are correctly linked to notes.id.
+create_audio_block_reference: This will now link audio_recordings.id to a block_lexical_key. The block_lexical_key must correspond to a key within the note's Lexical JSON content or a blocks.lexical_key if using the separate blocks table.
+get_audio_recordings, get_audio_block_references: Update queries for PostgreSQL.
+Phase 4: Frontend - Adapting to JSON Content and New API Payloads
+
+Update API Call Signatures and Data Handling (fileSystem.ts, gita/src/api/audio.ts):
+
+The frontend will now send/receive Lexical JSON for note content instead of Markdown strings.
+Update TypeScript types (gita/src/types/index.ts) for Note.content to be string (serialized JSON) or a more specific Lexical JSON type.
+Lexical Editor Integration (gita/src/components/editor/LexicalEditor.tsx):
+
+initialContent: Will now directly be the Lexical JSON string fetched from the backend. The markdownToLexical utility will no longer be needed for loading.
+onChange: The lexicalToMarkdown utility will no longer be needed. The editor's state (as JSON) will be sent directly to the backend for saving.
+The markdownUtils.ts file might become largely obsolete or repurposed for import/export functionality if desired.
+Audio Block and Timestamping (AutoTimestampPlugin.tsx, gita/src/components/editor/nodes/AudioBlockNode.tsx):
+
+Ensure that block IDs (Lexical keys) used for audio timestamping are consistent with what's stored/referenced in the backend (audio_block_references.block_lexical_key).
