@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial release of Obsidian Replica
+- Initial release of Gita
 - Markdown editing with Lexical editor
 - Audio recording from microphone and system audio
 - Audio playback with timestamp linking

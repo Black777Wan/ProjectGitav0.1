@@ -5,7 +5,6 @@ import { FiSave, FiLink, FiClock } from 'react-icons/fi';
 interface EditorContainerProps {
   noteTitle: string;
   // isRecording, onStartRecording, onStopRecording removed
-  onSave: () => void;
   children: React.ReactNode; // This will be LexicalEditor
 }
 
@@ -14,7 +13,6 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
   // isRecording, // Removed
   // onStartRecording, // Removed
   // onStopRecording, // Removed
-  onSave,
   children // LexicalEditor is passed here
 }) => {
   // To pass currentNoteId to LexicalEditor, we need to ensure children can accept it.
@@ -27,19 +25,9 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
   return (
     <div className="flex flex-col h-screen"> {/* Outer container itself doesn't need a bg if App.tsx provides one */}
       {/* Editor header */}
-      <div className="flex items-center justify-between p-2 border-b border-light-border dark:border-obsidian-border bg-light-bg dark:bg-obsidian-bg">
+      <div className="flex items-center justify-start p-2 border-b border-light-border dark:border-obsidian-border bg-light-bg dark:bg-obsidian-bg">
         <div className="flex items-center">
           <h2 className="text-lg font-medium text-light-text dark:text-obsidian-text">{noteTitle}</h2>
-        </div>
-        <div className="flex items-center space-x-2">
-          {/* AudioRecorder component removed */}
-          <button 
-            className="p-1.5 rounded hover:bg-light-hover dark:hover:bg-obsidian-hover text-light-text dark:text-obsidian-text"
-            onClick={onSave}
-            title="Save"
-          >
-            <FiSave /> {/* Icon inherits color */}
-          </button>
         </div>
       </div>
 

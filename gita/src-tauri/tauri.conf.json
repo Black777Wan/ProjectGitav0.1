@@ -1,5 +1,5 @@
 {
-  "productName": "Obsidian Replica",
+  "productName": "Gita",
   "version": "0.1.0",
   "identifier": "com.ydnotes.gita",
   "build": {
@@ -13,7 +13,7 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "Obsidian Replica",
+        "title": "Gita",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
