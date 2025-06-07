@@ -1,8 +1,8 @@
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useEffect } from 'react';
 import { $getSelection, $isRangeSelection, COMMAND_PRIORITY_EDITOR, createCommand, LexicalCommand } from 'lexical';
-import { $createBacklinkNode, BacklinkNode } from '../nodes/BacklinkNode'; // Imported BacklinkNode for instanceof check
-import { TextNode, ElementNode } from 'lexical'; // Imported TextNode and ElementNode
+import { $createBacklinkNode } from '../nodes/BacklinkNode'; // Imported BacklinkNode for instanceof check
+import { TextNode } from 'lexical'; // Imported TextNode and ElementNode
 
 // Define a custom command for inserting backlinks
 export const INSERT_BACKLINK_COMMAND: LexicalCommand<{

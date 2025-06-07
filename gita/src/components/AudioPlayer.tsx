@@ -4,14 +4,12 @@ import { FiPlay, FiPause, FiVolume2, FiVolumeX, FiSkipBack, FiSkipForward } from
 interface AudioPlayerProps {
   audioSrc: string;
   startTime?: number; // Start time in milliseconds
-  blockId?: string;
   onTimeUpdate?: (currentTime: number) => void;
 }
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({ 
   audioSrc, 
   startTime = 0, 
-  blockId,
   onTimeUpdate 
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);

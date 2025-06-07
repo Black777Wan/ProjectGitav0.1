@@ -25,31 +25,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": ["$APP/*"]
-      },
-      "capabilities": [
-        {
-          "identifier": "basic",
-          "description": "Basic permissions",
-          "windows": ["*"],
-          "permissions": [
-            "tauri:shell-open",
-            "tauri:dialog-open",
-            "tauri:dialog-save",
-            "tauri:dialog-message",
-            "tauri:fs-read-dir-recursive",
-            "tauri:fs-read-file",
-            "tauri:fs-write-file-append",
-            "tauri:fs-write-file",
-            "tauri:fs-create-dir-recursive",
-            "tauri:fs-remove",
-            "tauri:fs-rename",
-            "tauri:fs-copy-file",
-            "tauri:fs-exists",
-            "tauri:path-all",
-            "tauri:protocol-asset"
-          ]
-        }
-      ]
+      }
     }
   },
   "bundle": {
@@ -62,8 +38,7 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "createUpdaterArtifacts": false
+    ]
   },
   "plugins": {}
 }

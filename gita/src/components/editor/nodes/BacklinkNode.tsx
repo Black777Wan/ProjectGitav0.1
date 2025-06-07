@@ -1,5 +1,4 @@
-import { EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread } from 'lexical';
-import { DecoratorNode } from '@lexical/react/LexicalDecoratorNode';
+import { LexicalNode, NodeKey, SerializedLexicalNode, Spread, DecoratorNode } from 'lexical';
 import React from 'react';
 
 export interface BacklinkPayload {
@@ -43,7 +42,7 @@ export class BacklinkNode extends DecoratorNode<React.ReactNode> {
     this.__noteTitle = noteTitle;
   }
 
-  createDOM(config: EditorConfig): HTMLElement {
+  createDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'editor-backlink';
     return span;

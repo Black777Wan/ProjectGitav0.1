@@ -1,6 +1,5 @@
 import { EditorState } from 'lexical';
-import { $convertToMarkdownString, TRANSFORMERS as LEXICAL_TRANSFORMERS } from '@lexical/markdown';
-import { $getRoot, $getSelection, $isRangeSelection, createEditor } from 'lexical';
+import { $convertToMarkdownString } from '@lexical/markdown';
 // This is a simplified mock, actual $convertFromMarkdownString is more complex
 // and typically used within an editor instance via an update.
 // For testing markdownToLexical, we're more interested in the setup.
