@@ -1,5 +1,8 @@
 {
   "scripts": {
     "test": "npm run test --prefix gita"
+  },
+  "dependencies": {
+    "zustand": "^5.0.5"
   }
 }

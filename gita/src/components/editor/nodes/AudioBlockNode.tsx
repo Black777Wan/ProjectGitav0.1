@@ -1,6 +1,6 @@
 import { EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread } from 'lexical';
-import { DecoratorNode } from '@lexical/react/LexicalDecoratorNode';
-import React from 'react';
+import { jsxDEV } from "react/jsx-dev-runtime";
+import { DecoratorNode } from "@lexical/react";
 import AudioBlockComponent from '../AudioBlockComponent';
 
 // Based on jules_wip: blockId is the node's own key and not part of the external payload for creation.

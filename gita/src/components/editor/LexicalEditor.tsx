@@ -10,8 +10,8 @@ import { CodeHighlightNode, CodeNode } from '@lexical/code';
 import { TableNode, TableCellNode, TableRowNode } from '@lexical/table';
 import { AutoLinkNode, LinkNode } from '@lexical/link';
 
-import { BlockReferenceNode } from '../nodes/BlockReferenceNode';
-import { AudioBlockNode } from '../nodes/AudioBlockNode'; // Keep this from jules_wip
+import { BlockReferenceNode } from './nodes/BlockReferenceNode';
+import { AudioBlockNode } from './nodes/AudioBlockNode'; // Keep this from jules_wip
 
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';

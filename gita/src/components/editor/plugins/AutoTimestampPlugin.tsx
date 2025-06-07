@@ -12,7 +12,7 @@ import {
   $isRootNode,          // From jules_wip
   // ElementNode,       // ElementNode from jules_wip not strictly needed if using specific types
 } from 'lexical';
-import { useAudioRecordingStore } from '../../../../stores/audioRecordingStore';
+import { useAudioRecordingStore } from '../../../stores/audioRecordingStore';
 import { invoke } from '@tauri-apps/api/tauri';
 import { $createAudioBlockNode } from '../nodes/AudioBlockNode'; // From jules_wip
 
