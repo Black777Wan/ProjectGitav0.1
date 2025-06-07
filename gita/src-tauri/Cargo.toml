@@ -26,6 +26,7 @@ cpal = "0.15.2"
 hound = "3.5.0"
 lazy_static = "1.4.0"
 ringbuf = "0.3.3"
+tauri-plugin-opener = "0.3.0" # Added opener plugin
 uuid = { version = "1", features = ["v4"] }
 
 [features]
