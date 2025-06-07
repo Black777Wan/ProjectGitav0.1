@@ -5,7 +5,8 @@ import LexicalEditor from "./components/editor/LexicalEditor";
 import AudioRecordingsList from "./components/AudioRecordingsList";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import ThemeToggle from "./components/ThemeToggle";
-import { Note, ErrorMessage } from "./types"; // Keep ErrorMessage from main
+import { Note } from "./types"; // ErrorMessage removed
+import { useErrorMessages } from './hooks/useErrorMessages'; // Import the new hook
 import { 
   getAllNotes, 
   readMarkdownFile, 
@@ -19,12 +20,13 @@ import { v4 as uuidv4 } from 'uuid'; // Keep from jules_wip
 import { FiHelpCircle, FiSettings } from "react-icons/fi";
 import Tooltip from "./components/Tooltip";
 import { useAudioRecordingStore } from "./stores/audioRecordingStore"; // Keep from jules_wip
+import ErrorDisplay from './components/ErrorDisplay'; // Import ErrorDisplay
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'; // Import the new hook
 
 function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  // errorMessages state and utilities from main/previous work
-  const [errorMessages, setErrorMessages] = useState<ErrorMessage[]>([]); 
+  const { errorMessages, addErrorMessage, removeErrorMessage } = useErrorMessages(); // Call the hook
   const [isLoading, setIsLoading] = useState(true);
   const [showAudioRecordings, setShowAudioRecordings] = useState(false);
   const [audioRecordingsNoteId, setAudioRecordingsNoteId] = useState<string | null>(null);
@@ -33,15 +35,6 @@ function App() {
   const [searchFocusRequested, setSearchFocusRequested] = useState(false);
 
   const selectedNote = notes.find(note => note.id === selectedNoteId) || null;
-
-  const addErrorMessage = useCallback((message: string) => {
-    const id = `err_${Date.now()}`;
-    setErrorMessages(prevErrors => [...prevErrors, { id, message }]);
-  }, []);
-
-  const removeErrorMessage = useCallback((id: string) => {
-    setErrorMessages(prevErrors => prevErrors.filter(error => error.id !== id));
-  }, []);
 
   useEffect(() => {
     const loadNotes = async () => {
@@ -53,7 +46,7 @@ function App() {
             try {
               return await readMarkdownFile(meta.path);
             } catch (error) {
-              addErrorMessage(`Error loading note ${meta.title}: ${(error as Error).message}`);
+              addErrorMessage(`Error loading note ${meta.title}: ${(error as Error).message}`); // Now uses hook's addErrorMessage
               return {
                 id: meta.id, title: meta.title, path: meta.path,
                 content: `# ${meta.title}
@@ -84,85 +77,7 @@ Error loading note content.`,
     setSearchFocusRequested(false);
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeElement = document.activeElement;
-      const isInputFocused = activeElement instanceof HTMLInputElement || 
-                             activeElement instanceof HTMLTextAreaElement ||
-                             activeElement?.getAttribute('contenteditable') === 'true';
-
-      if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        setSearchFocusRequested(true);
-        return;
-      }
-      if (isInputFocused) return;
-
-      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); handleNewNote(); }
-      if (e.ctrlKey && e.key === 'd') { e.preventDefault(); handleDailyNote(); }
-      if (e.ctrlKey && e.key === 's') { e.preventDefault(); handleSaveNote(); }
-      
-      // Ctrl+R logic from jules_wip (uses Zustand and direct invoke)
-      if (e.ctrlKey && e.key === 'r') {
-        e.preventDefault();
-        const storeState = useAudioRecordingStore.getState();
-        const storeActions = storeState.actions;
-
-        if (storeState.isRecordingActive) {
-          if (storeState.currentRecordingId) {
-            invoke('stop_recording', { recordingId: storeState.currentRecordingId })
-              .then(() => {
-                storeActions.stopRecording();
-                console.log("Global shortcut: Recording stopped.");
-              })
-              .catch(err => {
-                addErrorMessage(`Failed to stop recording: ${(err as Error).message}`);
-                // console.error("Global shortcut: Failed to stop recording via invoke:", err);
-                // Optionally still update UI store state if backend failed
-                storeActions.stopRecording(); // Ensure UI resets
-              });
-          } else {
-            // console.warn("Global shortcut: Stop recording attempted but no currentRecordingId in store.");
-            storeActions.stopRecording(); 
-          }
-        } else {
-          if (selectedNoteId) {
-            const newRecordingId = uuidv4();
-            getAudioDirectory()
-              .then(audioDir => {
-                // Ensure consistent path construction (e.g. handling separators if audioDir might have trailing slash)
-                // For now, direct concatenation is used as in original jules_wip.
-                const anticipatedFilePath = `${audioDir}/${newRecordingId}.wav`; 
-                return invoke('start_recording', { noteId: selectedNoteId, recordingId: newRecordingId })
-                  .then(() => {
-                    storeActions.startRecording(newRecordingId, anticipatedFilePath);
-                    console.log("Global shortcut: Recording started.");
-                  });
-              })
-              .catch(err => {
-                addErrorMessage(`Failed to start recording: ${(err as Error).message}`);
-                // console.error("Global shortcut: Failed to start recording:", err);
-              });
-          } else {
-            addErrorMessage("Please select a note to start recording.");
-            // console.warn("Global shortcut: Start recording attempted but no note selected.");
-          }
-        }
-      }
-
-      if (e.ctrlKey && e.key === '/') { e.preventDefault(); setShowKeyboardShortcuts(prev => !prev); }
-      if (e.key === 'Escape') { setShowKeyboardShortcuts(false); }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-    // Dependencies: selectedNoteId for Ctrl+R, addErrorMessage for error reporting,
-    // handleSearchFocused for Ctrl+F (though it's stable, including it is fine).
-  }, [selectedNoteId, addErrorMessage, handleSearchFocused]);
-
-  const handleNewNote = async () => {
+  const handleNewNote = useCallback(async () => {
     try {
       const title = `New Note ${new Date().toLocaleTimeString()}`;
       const content = `# ${title}
@@ -175,9 +90,9 @@ Start writing here...`;
     } catch (error) {
       addErrorMessage(`Error creating new note: ${(error as Error).message}`);
     }
-  };
+  }, [addErrorMessage]);
 
-  const handleDailyNote = async () => {
+  const handleDailyNote = useCallback(async () => {
     try {
       const dailyNote = await createDailyNote();
       const existingNoteIndex = notes.findIndex(note => note.id === dailyNote.id);
@@ -193,25 +108,34 @@ Start writing here...`;
     } catch (error) {
       addErrorMessage(`Error creating daily note: ${(error as Error).message}`);
     }
-  };
+  }, [addErrorMessage, notes]);
 
-  // Local handleStartRecording and handleStopRecording are removed (from jules_wip)
-
-  const handleSaveNote = async () => {
+  const handleSaveNote = useCallback(async () => {
     if (!selectedNote) return;
     try {
       await writeMarkdownFile(selectedNote.path, selectedNote.content);
-      setNotes(prevNotes => 
-        prevNotes.map(note => 
-          note.id === selectedNote.id 
-            ? { ...note, updatedAt: new Date().toISOString() } 
+      setNotes(prevNotes =>
+        prevNotes.map(note =>
+          note.id === selectedNote.id
+            ? { ...note, updatedAt: new Date().toISOString() }
             : note
         )
       );
     } catch (error) {
       addErrorMessage(`Failed to save note: ${(error as Error).message}`);
     }
-  };
+  }, [selectedNote, addErrorMessage]);
+
+  // Call the keyboard shortcuts hook
+  useKeyboardShortcuts({
+    selectedNoteId,
+    addErrorMessage,
+    handleNewNote,
+    handleDailyNote,
+    handleSaveNote,
+    setShowKeyboardShortcuts,
+    setSearchFocusRequested,
+  });
 
   const handleOpenSettings = () => { console.log("Opening settings"); };
 
@@ -303,23 +227,7 @@ Start writing here...`;
         isOpen={showKeyboardShortcuts} 
         onClose={() => setShowKeyboardShortcuts(false)} 
       />
-      {errorMessages.length > 0 && (
-        <div className="fixed bottom-4 right-4 w-full max-w-xs space-y-2 z-50">
-          {errorMessages.map((error) => (
-            <div
-              key={error.id}
-              className="bg-red-500 text-white p-3 rounded-lg shadow-lg flex justify-between items-start animate-fadeIn"
-            >
-              <p className="text-sm">{error.message}</p>
-              <button
-                onClick={() => removeErrorMessage(error.id)}
-                className="ml-2 text-red-100 hover:text-white"
-                aria-label="Dismiss error"
-              >&times;</button>
-            </div>
-          ))}
-        </div>
-      )}
+      <ErrorDisplay errorMessages={errorMessages} removeErrorMessage={removeErrorMessage} />
     </div>
   );
 }
