@@ -1,13 +1,17 @@
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::Mutex;
+
+use rusqlite::Connection;
+use tauri::AppHandle;
+
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use rusqlite::{params, Connection, Result as SqliteResult};
-use walkdir::WalkDir;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use serde_yaml;
 use uuid::Uuid;
+use walkdir::WalkDir;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NoteMetadata {

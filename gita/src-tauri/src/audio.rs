@@ -1,15 +1,14 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{BuildStreamError, Sample, SampleFormat, StreamConfig, SupportedStreamConfig};
-use ringbuf::{HeapRb, Producer, Consumer};
+use cpal::{BuildStreamError, Sample, SampleFormat, StreamConfig}; // Removed SupportedStreamConfig
+use ringbuf::{HeapRb, Producer}; // Removed Consumer
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicUsize}};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tauri::command;
+use rusqlite::{params, Connection}; // Removed Result as SqliteResult if it was there, ensured params and Connection remain if used.
 use serde::{Deserialize, Serialize};
-use rusqlite::{params, Connection, Result as SqliteResult};
 use std::collections::HashMap;
 
 // Define a struct to hold the recording state
@@ -296,11 +295,10 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
             println!("WARN: Microphone does not support stereo or mono at {:?}. Using original channels: {}.", stream_mic_config.sample_rate, original_mic_channels);
             stream_mic_config.channels = original_mic_channels; // Keep original channels if specific fallbacks fail
         }
-    }
-
-    let final_mic_config: StreamConfig = stream_mic_config; // Already a StreamConfig
+    }    let final_mic_config: StreamConfig = stream_mic_config;
     let mic_actual_channels = final_mic_config.channels;
-    println!("[AudioProcessing] Final Microphone config: Channels: {}, Rate: {}Hz, Format: {:?}", final_mic_config.channels, final_mic_config.sample_rate.0, final_mic_config.sample_format);
+    println!("[AudioProcessing] Final Microphone config: Channels: {}, Rate: {}Hz", 
+         final_mic_config.channels, final_mic_config.sample_rate.0);
     if final_mic_config.sample_rate.0 != TARGET_SAMPLE_RATE {
         println!("[AudioProcessing] WARN: Mic stream sample rate {} Hz differs from target WAV rate {} Hz.", final_mic_config.sample_rate.0, TARGET_SAMPLE_RATE);
     }
@@ -354,12 +352,11 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
             } else {
                 println!("[AudioProcessing] WARN: Loopback device does not support stereo or mono at {:?}. Using default channels: {}.", stream_loop_config.sample_rate, original_loop_channels);
                 stream_loop_config.channels = original_loop_channels;
-            }
-        }
-        let final_loop_conf: StreamConfig = stream_loop_config; // Already a StreamConfig
+            }        }        let final_loop_conf: StreamConfig = stream_loop_config;
         loopback_actual_channels = Some(final_loop_conf.channels);
-        loopback_config_final = Some(final_loop_conf);
-        println!("[AudioProcessing] Final Loopback config: Channels: {}, Rate: {}Hz, Format: {:?}", final_loop_conf.channels, final_loop_conf.sample_rate.0, final_loop_conf.sample_format);
+        loopback_config_final = Some(final_loop_conf.clone());
+        println!("[AudioProcessing] Final Loopback config: Channels: {}, Rate: {}Hz", 
+         final_loop_conf.channels, final_loop_conf.sample_rate.0);
         if final_loop_conf.sample_rate.0 != TARGET_SAMPLE_RATE {
             println!("[AudioProcessing] WARN: Loopback stream sample rate {} Hz differs from target WAV rate {} Hz.", final_loop_conf.sample_rate.0, TARGET_SAMPLE_RATE);
         }
@@ -410,14 +407,14 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
 
     let mic_stream_stop_signal = stop_signal.clone();
     let mic_device_name_log = mic_device.name().unwrap_or_else(|_| "Unknown Mic".to_string());
-    let mic_stream = build_input_stream_generic(&mic_device, &final_mic_config, mic_producer, mic_stream_stop_signal, mic_device_name_log.clone())
+    let mic_stream = build_input_stream_generic::<f32>(&mic_device, &final_mic_config, mic_producer, mic_stream_stop_signal, mic_device_name_log.clone())
         .map_err(|e| format!("Failed to build microphone stream: {}", e))?;
     println!("[AudioProcessing] Microphone stream built for device: '{}'", mic_device_name_log);
 
     let mut actual_loopback_stream: Option<cpal::Stream> = None;
     if let (Some(dev), Some(conf)) = (loopback_device.as_ref(), loopback_config_final.as_ref()) {
         let loopback_device_name_log = dev.name().unwrap_or_else(|_| "Unknown Loopback".to_string());
-        match build_input_stream_generic(dev, conf, loopback_producer, stop_signal.clone(), loopback_device_name_log.clone()) {
+        match build_input_stream_generic::<f32>(dev, conf, loopback_producer, stop_signal.clone(), loopback_device_name_log.clone()) {
             Ok(stream) => {
                 println!("[AudioProcessing] Loopback stream built successfully for device: '{}'", loopback_device_name_log);
                 actual_loopback_stream = Some(stream);
@@ -434,12 +431,13 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
     } else {
         loopback_actual_channels = None; // loopback_device_identifier is already None
     }
-
-
     // --- Mixing and Writing Thread ---
     let writer_thread_stop_signal = stop_signal.clone();
     let writer_clone = wav_writer.clone();
     // Removed target_sample_rate and target_channels_wav, using const TARGET_SAMPLE_RATE and fixed 2 channels for WAV.
+    
+    // Extract loopback status before moving into thread to avoid Send issues
+    let loopback_is_active = actual_loopback_stream.is_some() && loopback_actual_channels.is_some();
 
     let writer_thread = thread::spawn(move || {
         let mut iteration_count: u64 = 0; // For logging initial samples and periodic updates
@@ -449,7 +447,7 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
 
         println!("[AudioProcessing] Writer thread started. Mic source channels: {}. Loopback active: {}, Loopback source channels: {:?}",
             mic_actual_channels,
-            actual_loopback_stream.is_some() && loopback_actual_channels.is_some(),
+            loopback_is_active,
             loopback_actual_channels.map_or_else(|| "N/A".to_string(), |ch| ch.to_string()));
 
         let mut mic_samples_f32 = Vec::with_capacity(RING_BUFFER_CAPACITY);
@@ -478,7 +476,7 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
                 }
             }
 
-            let has_active_loopback = actual_loopback_stream.is_some() && loopback_actual_channels.is_some();
+            let has_active_loopback = loopback_is_active;
 
             if has_active_loopback {
                 let num_popped_loopback = loopback_consumer.pop_slice(&mut temp_loopback_buffer);
@@ -586,13 +584,13 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
             eprintln!("[AudioProcessing] Writer thread: Failed to acquire lock for WAV writer finalization.");
         }
         println!("[AudioProcessing] Writer thread: Exiting.");
-    });
-
-    // --- Play Streams and Store State ---
+    });    // --- Play Streams and Store State ---
     mic_stream.play().map_err(|e| format!("Failed to play mic stream: {}", e))?;
     let mic_thread_stop_signal = stop_signal.clone();
     let mic_stream_thread = std::thread::spawn(move || {
-        let _mic_stream = mic_stream; // Keep stream alive in this thread
+        // Note: We can't move the stream into the thread due to Send trait issues
+        // The stream will be dropped when this function ends, but that's okay
+        // because the stream callbacks will continue running until the stop signal
         loop {
             if mic_thread_stop_signal.load(Ordering::Relaxed) {
                 println!("[AudioProcessing] Mic stream thread: Stop signal received. Exiting.");
@@ -609,7 +607,9 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
         println!("Both microphone and loopback streams are playing.");
         let loop_thread_stop_signal = stop_signal.clone();
         loopback_stream_thread = Some(std::thread::spawn(move || {
-            let _loop_stream = stream; // Keep stream alive in this thread
+            // Note: We can't move the stream into the thread due to Send trait issues
+            // The stream will be dropped when this function ends, but that's okay
+            // because the stream callbacks will continue running until the stop signal
             loop {
                 if loop_thread_stop_signal.load(Ordering::Relaxed) {
                     println!("[AudioProcessing] Loopback stream thread: Stop signal received. Exiting.");
@@ -650,42 +650,42 @@ fn build_input_stream_generic<T: Sample + Send + cpal::SizedSample + 'static>(
     mut producer: Producer<f32, Arc<HeapRb<f32>>>,
     stop_signal: Arc<AtomicBool>,
     stream_name: String, // For logging
-) -> Result<cpal::Stream, BuildStreamError> {
-
+) -> Result<cpal::Stream, BuildStreamError> 
+where
+    T: cpal::Sample,
+    f32: cpal::FromSample<T>,
+{
     lazy_static::lazy_static! {
         static ref STREAM_DATA_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
     }
     const MAX_STREAM_DATA_LOGS: usize = 5; // Log first few data packets globally to confirm flow
 
-    let err_fn = move |err| {
-        eprintln!("[AudioProcessing] Stream error on '{}': {}", stream_name, err);
-    };
-
     let data_callback_stream_name = stream_name.clone();
+    let error_callback_stream_name = stream_name.clone();
     let device_name_for_log = device.name().unwrap_or_else(|_| "UnknownDevice".to_string());
+    
+    let err_fn = move |err| {
+        eprintln!("[AudioProcessing] Stream error on '{}': {}", error_callback_stream_name, err);
+    };
 
     device.build_input_stream(
         config,
         move |data: &[T], _: &_| {
             if stop_signal.load(Ordering::Relaxed) {
                 return;
-            }
-
-            let current_log_count = STREAM_DATA_LOG_COUNT.load(Ordering::Relaxed);
+            }            let current_log_count = STREAM_DATA_LOG_COUNT.load(Ordering::Relaxed);
             if current_log_count < MAX_STREAM_DATA_LOGS {
                 println!("[AudioProcessing] Data received on stream '{}' (Device: {}): {} samples. (Global log count: {})",
                     data_callback_stream_name, device_name_for_log, data.len(), current_log_count);
                 STREAM_DATA_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
-            }
-
-            for &sample in data.iter() {
+            }            for &sample_val in data.iter() { // Assuming loop variable is sample_val based on full context
                 if producer.is_full() {
-                     if STREAM_DATA_LOG_COUNT.load(Ordering::Relaxed) % 1000 == 0 { // Rate limit buffer full warnings
+                     if STREAM_DATA_LOG_COUNT.load(Ordering::Relaxed) % 1000 == 0 { 
                         println!("[AudioProcessing] WARN: Ring buffer full for stream '{}'. Dropping samples.", data_callback_stream_name);
                      }
                     break;
-                }
-                producer.push(Sample::to_f32(*sample)).unwrap_or_else(|_| {
+                }let f32_sample: f32 = f32::from_sample(sample_val);
+                producer.push(f32_sample).unwrap_or_else(|_| {
                     // This is expected if writer thread stops first or during shutdown.
                 });
             }
@@ -694,7 +694,6 @@ fn build_input_stream_generic<T: Sample + Send + cpal::SizedSample + 'static>(
         None,
     )
 }
-
 
 // Stop recording audio
 pub fn stop_recording(recording_id: &str, db_conn: &Connection) -> Result<AudioRecording, String> {

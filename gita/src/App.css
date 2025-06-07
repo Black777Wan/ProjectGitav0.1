@@ -1,18 +1,41 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
-}
-:root {
+/* Basic app styling */
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
+  font-feature-settings: "liga" 1, "calt" 1;
+  background-color: var(--color-light-bg);
+  color: var(--color-light-text);
+}
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+.dark body {
+  background-color: var(--color-obsidian-bg);
+  color: var(--color-obsidian-text);
+}
+
+/* Define CSS variables */
+:root {
+  --color-light-bg: #F5F5F5;
+  --color-light-sidebar: #E0E0E0;
+  --color-light-accent: #1976D2;
+  --color-light-text: #212121;
+  --color-light-muted: #757575;
+  --color-light-border: #BDBDBD;
+  --color-light-hover: #EEEEEE;
+  --color-light-active: #D6D6D6;
+  
+  --color-obsidian-bg: #202020;
+  --color-obsidian-sidebar: #252525;
+  --color-obsidian-accent: #7F6DF2;
+  --color-obsidian-text: #DCDDDE;
+  --color-obsidian-muted: #999999;
+  --color-obsidian-border: #333333;
+  --color-obsidian-hover: #303030;
+  --color-obsidian-active: #383838;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

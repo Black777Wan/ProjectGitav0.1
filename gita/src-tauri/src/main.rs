@@ -24,7 +24,8 @@ fn init_app_state(app_handle: &AppHandle) -> Result<AppState, Box<dyn std::error
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
-        .ok_or("Failed to get app data directory")?;
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+    let db_path = app_data_dir.join("gita_db.sqlite");
     
     // Create the app data directory if it doesn't exist
     std::fs::create_dir_all(&app_data_dir)?;
