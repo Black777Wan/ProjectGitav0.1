@@ -131,14 +131,14 @@
 }
 
 .editor-listitem::before {
-  content: '•';
+  content: '-';
   position: absolute;
   left: 0;
-  top: 0;
+  top: 0.1em; /* Adjusted for hyphen alignment */
   color: #7F6DF2;
-  font-size: 14px;
+  font-size: 14px; /* Consider adjusting if hyphen looks too small/large */
   line-height: 1.6;
-  font-weight: bold;
+  font-weight: normal; /* Hyphens are usually not bold */
   width: 16px;
   text-align: center;
 }

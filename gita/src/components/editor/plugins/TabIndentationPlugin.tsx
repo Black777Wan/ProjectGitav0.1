@@ -38,6 +38,20 @@ export default function TabIndentationPlugin(): null {
             // Tab to indent
             editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined);
           }
+
+          // Prevent default browser behavior (e.g., focus change) and stop propagation.
+          payload.preventDefault();
+          payload.stopPropagation();
+
+          // Explicitly re-focus the editor.
+          // This ensures that if the focus was inadvertently lost, it's restored.
+          // It's generally safe to call this after dispatching commands.
+          // If timing issues were to occur (e.g. command processing is async in a way
+          // that focus call is too early), one might defer it with setTimeout:
+          // setTimeout(() => editor.focus(), 0);
+          // But start with direct call.
+          editor.focus();
+
           return true;
         }
         
