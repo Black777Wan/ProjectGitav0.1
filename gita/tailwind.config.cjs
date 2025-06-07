@@ -5,6 +5,18 @@ module.exports = {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: [
+    'bg-light-bg',
+    'dark:bg-obsidian-bg',
+    'text-light-text',
+    'dark:text-obsidian-text',
+    'bg-light-border',
+    'dark:bg-obsidian-border',
+    'hover:bg-light-muted',
+    'dark:hover:bg-obsidian-muted',
+    'ring-light-accent',
+    'dark:ring-obsidian-accent',
+  ],
   theme: {
     extend: {
       colors: {
@@ -79,4 +91,3 @@ module.exports = {
   },
   plugins: [],
 }
-
