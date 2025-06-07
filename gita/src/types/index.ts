@@ -2,11 +2,10 @@
 export interface Note {
   id: string;
   title: string;
-  path: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  tags: string[];
+  content_json: string; // Stores stringified Lexical JSON state
+  raw_markdown?: string; // Optional raw markdown
+  created_at: string;
+  updated_at: string;
 }
 
 // Error Message type
@@ -63,9 +62,16 @@ export interface AppSettings {
 export interface NoteMetadata {
   id: string;
   title: string;
-  path: string;
   created_at: string;
   updated_at: string;
-  tags: string[];
+}
+
+export interface BlockReference {
+  id: string;
+  referencing_page_id: string;
+  referencing_block_id: string;
+  referenced_page_id: string;
+  referenced_block_id: string;
+  created_at: string; // Assuming RFC3339 date string
 }
 

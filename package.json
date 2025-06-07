@@ -3,6 +3,7 @@
     "test": "npm run test --prefix gita"
   },
   "dependencies": {
+    "@lexical/markdown": "^0.32.1",
     "zustand": "^5.0.5"
   },
   "devDependencies": {

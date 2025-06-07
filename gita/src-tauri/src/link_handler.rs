@@ -206,3 +206,40 @@ pub async fn remove_block_reference(
 
 // Also consider if a function to remove by (referencing_block_id, referenced_block_id) is needed.
 // For now, remove by the reference's own ID.
+
+
+// --- Functions to clear links/references for a page (as per Step 3 of plan) ---
+
+pub async fn remove_all_page_links_from_source(
+    pool: &PgPool,
+    source_page_id: Uuid,
+) -> Result<u64, DalError> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM page_links
+        WHERE source_page_id = $1
+        "#,
+        source_page_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+pub async fn remove_all_block_references_from_referencing_page(
+    pool: &PgPool,
+    referencing_page_id: Uuid, // This is the page whose content is being updated
+) -> Result<u64, DalError> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM block_references
+        WHERE referencing_page_id = $1
+        "#,
+        referencing_page_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}

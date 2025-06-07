@@ -22,6 +22,7 @@ use crate::page_handler::Page as DalPage;
 use chrono::{DateTime, Utc};
 use crate::audio_handler::AudioRecording as DalAudioRecording;
 use crate::audio_handler::AudioTimestamp as DalAudioTimestamp;
+use crate::link_handler::BlockReference as DalBlockReference; // For the new command
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct CommandAudioRecording {
@@ -108,6 +109,32 @@ impl From<DalPage> for CommandPage {
         }
     }
 }
+
+// New struct for Block References to be sent over Tauri command
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct CommandBlockReference {
+    id: String,
+    referencing_page_id: String,
+    referencing_block_id: String,
+    referenced_page_id: String,
+    referenced_block_id: String,
+    created_at: String,
+}
+
+// Conversion from the DAL struct to the Command struct
+impl From<DalBlockReference> for CommandBlockReference {
+    fn from(br: DalBlockReference) -> Self {
+        CommandBlockReference {
+            id: br.id.to_string(),
+            referencing_page_id: br.referencing_page_id.to_string(),
+            referencing_block_id: br.referencing_block_id.to_string(),
+            referenced_page_id: br.referenced_page_id.to_string(),
+            referenced_block_id: br.referenced_block_id.to_string(),
+            created_at: br.created_at.to_rfc3339(),
+        }
+    }
+}
+
 
 // Define a struct to hold the database connection
 struct AppState {
@@ -461,6 +488,20 @@ async fn add_audio_timestamp(
     Ok(CommandAudioTimestamp::from(created_timestamp))
 }
 
+// Command to get references to a specific block
+#[tauri::command]
+async fn get_references_for_block(state: State<'_, AppState>, block_id: String) -> Result<Vec<CommandBlockReference>, String> {
+    let block_uuid = Uuid::parse_str(&block_id).map_err(|e| format!("Invalid block ID format: {}", e))?;
+
+    let references = link_handler::get_block_references_to_block(&state.pool, block_uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let command_references = references.into_iter().map(CommandBlockReference::from).collect();
+    Ok(command_references)
+}
+
+
 #[tokio::main]
 async fn main() {
     tauri::Builder::default()
@@ -488,7 +529,8 @@ async fn main() {
             stop_recording,
             get_audio_recordings,
             get_audio_timestamps_for_recording, // Renamed
-            add_audio_timestamp // Renamed
+            add_audio_timestamp, // Renamed
+            get_references_for_block
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
