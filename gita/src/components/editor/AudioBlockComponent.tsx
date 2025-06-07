@@ -121,7 +121,6 @@ const AudioBlockComponent: React.FC<AudioBlockComponentProps> = ({
           <AudioPlayer
             audioSrc={playableAudioSrc}
             startTime={startTime} // AudioPlayer expects startTime in milliseconds
-            autoPlay={true} 
           />
         </div>
       )}

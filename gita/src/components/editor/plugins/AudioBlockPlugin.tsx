@@ -2,7 +2,6 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { useEffect } from 'react';
 import { $getSelection, $isRangeSelection, COMMAND_PRIORITY_EDITOR, createCommand, LexicalCommand } from 'lexical';
 import { $createAudioBlockNode } from '../nodes/AudioBlockNode';
-import { v4 as uuidv4 } from 'uuid';
 
 // Define a custom command for inserting audio blocks
 export const INSERT_AUDIO_BLOCK_COMMAND: LexicalCommand<{
@@ -27,14 +26,13 @@ export default function AudioBlockPlugin(): null {
           
           if ($isRangeSelection(selection)) {
             const { audioFilePath, recordingId } = payload;
-            const blockId = payload.blockId || `block-${uuidv4()}`; // Generate blockId if not provided
+            // const blockId = payload.blockId || `block-${uuidv4()}`; // Generate blockId if not provided - blockId is not used by $createAudioBlockNode
             const startTime = payload.startTime || 0; // Default startTime to 0 if not provided
 
             const audioBlockNode = $createAudioBlockNode(
               audioFilePath, // Use audioFilePath
-              blockId,
-              startTime,
-              recordingId
+              recordingId,
+              startTime
             );
             
             selection.insertNodes([audioBlockNode]);

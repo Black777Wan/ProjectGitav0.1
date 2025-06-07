@@ -5,17 +5,16 @@ import {
   FiCode, 
   FiList, 
   FiLink, 
-  FiAlignLeft, // This one seems unused, but harmless to keep for now
   FiType,
   FiHash,
   FiFileText,
   FiCheckSquare,
   // FiMic, // Not used directly, isRecordingActive triggers FiPlay/FiStop
   FiPlay, 
-  FiStop
+  FiSquare
 } from 'react-icons/fi';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "@tauri-apps/api/core";
 import { v4 as uuidv4 } from "uuid";
 import { useAudioRecordingStore } from "../../stores/audioRecordingStore";
 import { useEffect, useRef } from "react"; // Keep from jules_wip (useState removed)
@@ -33,7 +32,7 @@ import {
 import { $setBlocksType } from '@lexical/selection';
 import { $createHeadingNode } from '@lexical/rich-text';
 import { TOGGLE_LINK_COMMAND } from '@lexical/link';
-import { INSERT_BLOCK_REFERENCE_COMMAND } from '../plugins/BlockReferencePlugin';
+import { INSERT_BLOCK_REFERENCE_COMMAND } from './plugins/BlockReferencePlugin';
 
 
 interface EditorToolbarProps {
@@ -267,7 +266,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ currentNoteId }) => {
           }`}
           title={isRecordingActive ? "Stop Recording" : "Start Recording"}
         >
-          {isRecordingActive ? <FiStop /> : <FiPlay />}
+          {isRecordingActive ? <FiSquare /> : <FiPlay />}
         </button>
       </div>
     </div>

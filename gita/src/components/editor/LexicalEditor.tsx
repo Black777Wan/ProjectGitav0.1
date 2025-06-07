@@ -1,11 +1,13 @@
 import React from 'react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
+import LexicalErrorBoundary from '@lexical/react/LexicalErrorBoundary';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
-import { ListItemNode, ListNode, CheckListNode } from '@lexical/list'; // CheckListNode was in both
+import { ListItemNode, ListNode } from '@lexical/list'; // CheckListNode was in both
+// import { CheckListNode } from '@lexical/list'; // CheckListNode was in both - Commented out due to TS2305
 import { CodeHighlightNode, CodeNode } from '@lexical/code';
 import { TableNode, TableCellNode, TableRowNode } from '@lexical/table';
 import { AutoLinkNode, LinkNode } from '@lexical/link';
@@ -113,6 +115,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
     onError: (error: Error) => {
       console.error('Editor error:', error);
     },
+    ErrorBoundary: LexicalErrorBoundary,
     nodes: [
       HeadingNode,
       ListNode,
@@ -125,7 +128,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
       TableRowNode,
       AutoLinkNode,
       LinkNode,
-      CheckListNode, 
+      // CheckListNode, // Commented out due to TS2305
       BlockReferenceNode,
       AudioBlockNode, // Keep this from jules_wip
     ],
@@ -147,6 +150,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
             <RichTextPlugin
               contentEditable={<ContentEditable className="editor-input" />}
               placeholder={<div className="editor-placeholder">Start writing...</div>}
+              ErrorBoundary={LexicalErrorBoundary}
             />
             <HistoryPlugin />
             <AutoFocusPlugin />

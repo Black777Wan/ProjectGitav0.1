@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react"; // Keep useCallback
+import { useState, useEffect, useCallback } from "react"; // Keep useCallback
 import Sidebar from "./components/Sidebar";
 import EditorContainer from "./components/EditorContainer";
 import LexicalEditor from "./components/editor/LexicalEditor";
@@ -280,7 +280,6 @@ Start writing here...`;
               {/* Props for EditorContainer from jules_wip */}
               <EditorContainer
                 noteTitle={selectedNote.title}
-                currentNoteId={selectedNote.id} 
                 onSave={handleSaveNote}
               >
                 {/* Props for LexicalEditor are consistent */}

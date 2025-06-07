@@ -1,4 +1,6 @@
-import { EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread, DecoratorNode } from 'lexical';
+
+import { LexicalNode, NodeKey, SerializedLexicalNode, Spread, DecoratorNode } from 'lexical';
+
 import React from 'react';
 
 export interface BlockReferencePayload {
@@ -48,7 +50,7 @@ export class BlockReferenceNode extends DecoratorNode<React.ReactNode> {
     this.__previewText = previewText;
   }
 
-  createDOM(config: EditorConfig): HTMLElement {
+  createDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'editor-block-reference';
     return span;
