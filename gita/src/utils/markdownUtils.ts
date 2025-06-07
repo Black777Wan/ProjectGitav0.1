@@ -3,51 +3,58 @@ import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
   TRANSFORMERS as LEXICAL_TRANSFORMERS,
-  LIST_TRANSFORMER as OriginalListTransformer,
-  ElementTransformer // For typing, might not be strictly necessary if not directly used for variable types
+  // ElementTransformer is useful for typing if we declare variable types,
+  // but customListTransformer will infer its type from OriginalListTransformer.
+  ElementTransformer
 } from '@lexical/markdown';
 
-// Define the custom list transformer
-const customListTransformer: ElementTransformer = {
-  ...OriginalListTransformer,
-  export: (node, exportChildren, depth) => {
+// Find the original ListTransformer from Lexical's exported array.
+// This heuristic checks for a common regex used by list transformers.
+const OriginalListTransformer = LEXICAL_TRANSFORMERS.find(transformer => {
+  if (transformer && typeof transformer === 'object' && transformer.regExp) {
+    // Common regex for markdown lists (unordered or ordered)
+    const listRegexSrc = /^(?:(?:\s*(?:\*|\-|\+))|\s*\d+\.\s+)/.source;
+    // Check if the transformer's regex source string starts with the list regex pattern
+    // This is more robust than direct equality if Lexical's regex has flags or additions.
+    return typeof transformer.regExp.source === 'string' && transformer.regExp.source.startsWith(listRegexSrc.substring(0, listRegexSrc.length -1)); // removing trailing / from source
+  }
+  return false;
+});
+
+if (!OriginalListTransformer) {
+  // Fallback or more detailed error reporting if needed.
+  // For now, this will stop execution if the transformer isn't found, which is critical.
+  console.error("Failed to find the original ListTransformer in LEXICAL_TRANSFORMERS. Markdown list conversion may not work as expected.");
+  // Depending on strictness, could throw new Error(...)
+}
+
+// Define the custom list transformer, only if OriginalListTransformer was found.
+// The customListTransformer type will be inferred from OriginalListTransformer.
+const customListTransformer = OriginalListTransformer ? {
+  ...OriginalListTransformer, // Spread existing properties
+  export: (node: any, exportChildren: (node: any) => string, depth: number) => {
     // Cast node to access specific list properties like getListType()
-    // This assumes 'node' is a ListNode-like structure.
-    // Proper typing would involve ensuring 'node' conforms to an interface that has getListType.
-    // For Lexical, ListNode has 'getListType()'.
-    const listNode = node as any; // Using 'any' for simplicity, ensure correct type in practice.
+    const listNode = node; // Assuming node is already the correct type or 'any' allows getListType
 
-    // Call the original transformer's export function to get the default markdown output.
-    // This is generally safer than trying to rebuild the entire export logic.
-    let markdownOutput = OriginalListTransformer.export(node, exportChildren, depth);
+    // Call the original transformer's export function.
+    // The '!' asserts that 'export' is present on OriginalListTransformer.
+    // This is needed if the 'export' method is optional in the base ElementTransformer type.
+    let markdownOutput = OriginalListTransformer.export!(node, exportChildren, depth);
 
-    // If the list is a bullet list, replace '*' with '-'
     if (listNode.getListType && listNode.getListType() === 'bullet') {
-      // Replace leading '* ' with '- ' for each list item line.
-      // This regex handles various indentation levels:
-      // ^(\s*) matches any leading whitespace (indentation) and captures it (group 1).
-      // \* matches the literal asterisk.
-      // (\s) matches a single whitespace character after the asterisk and captures it (group 2).
-      // gm flags ensure it works globally (all occurrences) and multiline.
-      // $1-$2 replaces the matched pattern with the captured indentation, a hyphen, and the captured space.
       markdownOutput = markdownOutput.replace(/^(\s*)\*(\s)/gm, '$1-$2');
     }
     return markdownOutput;
   },
-};
+} : null; // Handle case where OriginalListTransformer might not be found
 
-// Create a new transformers array, replacing the original list transformer with the custom one.
-const customTransformers: ElementTransformer[] = LEXICAL_TRANSFORMERS.map(transformer => {
-  if (transformer === OriginalListTransformer) {
-    return customListTransformer;
-  }
-  return transformer;
-});
-
-// If OriginalListTransformer might not be in LEXICAL_TRANSFORMERS by default (e.g. if it's a complex setup)
-// a more robust way to ensure it's replaced (or added if missing and LIST_TRANSFORMER was a category)
-// would be to filter it out and then add the custom one.
-// However, typically LIST_TRANSFORMER is a specific object in the array.
+// Create the final transformers array for use in the editor.
+// If customListTransformer is null (original not found), then just use LEXICAL_TRANSFORMERS.
+const finalTransformers: ElementTransformer[] = customListTransformer
+  ? LEXICAL_TRANSFORMERS.map(transformer =>
+      transformer === OriginalListTransformer ? customListTransformer : transformer
+    )
+  : LEXICAL_TRANSFORMERS;
 
 /**
  * Convert markdown text to Lexical editor state
@@ -60,7 +67,7 @@ export function markdownToLexical(markdown: string): () => void {
     // This function is executed by Lexical within an update cycle.
     // $getRoot() and other $ prefixed functions are available.
     $getRoot().clear(); // Clear previous content
-    $convertFromMarkdownString(markdown, customTransformers);
+    $convertFromMarkdownString(markdown, finalTransformers);
   };
 }
 
@@ -71,6 +78,6 @@ export function markdownToLexical(markdown: string): () => void {
  * @returns The markdown text
  */
 export function lexicalToMarkdown(editorState: EditorState): string {
-  return editorState.read(() => $convertToMarkdownString(customTransformers));
+  return editorState.read(() => $convertToMarkdownString(finalTransformers));
 }
 
