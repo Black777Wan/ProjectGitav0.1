@@ -3,22 +3,22 @@ import { AudioRecording, AudioBlockReference } from '../types';
 
 // Start recording
 export async function startRecording(noteId: string, recordingId: string): Promise<string> {
-  return invoke('start_recording', { noteId, recordingId });
+  return invoke('start_recording', { note_id: noteId, recording_id: recordingId });
 }
 
 // Stop recording
-export async function stopRecording(recordingId: string): Promise<void> {
-  return invoke('stop_recording', { recordingId });
+export async function stopRecording(recordingId: string): Promise<AudioRecording> {
+  return invoke('stop_recording', { recording_id: recordingId });
 }
 
 // Get audio recordings for a note
 export async function getAudioRecordings(noteId: string): Promise<AudioRecording[]> {
-  return invoke('get_audio_recordings', { noteId });
+  return invoke('get_audio_recordings', { note_id: noteId });
 }
 
 // Get audio block references for a recording
 export async function getAudioBlockReferences(recordingId: string): Promise<AudioBlockReference[]> {
-  return invoke('get_audio_block_references', { recordingId });
+  return invoke('get_audio_block_references', { recording_id: recordingId });
 }
 
 // Create an audio block reference
@@ -27,6 +27,10 @@ export async function createAudioBlockReference(
   blockId: string,
   audioOffsetMs: number
 ): Promise<AudioBlockReference> {
-  return invoke('create_audio_block_reference', { recordingId, blockId, audioOffsetMs });
+  return invoke('create_audio_block_reference', {
+    recording_id: recordingId,
+    block_id: blockId,
+    audio_offset_ms: audioOffsetMs
+  });
 }
 

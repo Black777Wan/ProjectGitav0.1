@@ -1,94 +1,73 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react"; // Keep useCallback
 import Sidebar from "./components/Sidebar";
 import EditorContainer from "./components/EditorContainer";
 import LexicalEditor from "./components/editor/LexicalEditor";
 import AudioRecordingsList from "./components/AudioRecordingsList";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import ThemeToggle from "./components/ThemeToggle";
-import { Note, ErrorMessage } from "./types";
-import { getAllNotes, readMarkdownFile, writeMarkdownFile, createNote, createDailyNote } from "./api/fileSystem";
-import { startRecording, stopRecording } from "./api/audio";
+import { Note, ErrorMessage } from "./types"; // Keep ErrorMessage from main
+import { 
+  getAllNotes, 
+  readMarkdownFile, 
+  writeMarkdownFile, 
+  createNote, 
+  createDailyNote, 
+  getAudioDirectory // Keep from jules_wip
+} from "./api/fileSystem";
+import { invoke } from "@tauri-apps/api/tauri"; // Keep from jules_wip
+import { v4 as uuidv4 } from 'uuid'; // Keep from jules_wip
 import { FiHelpCircle, FiSettings } from "react-icons/fi";
 import Tooltip from "./components/Tooltip";
+import { useAudioRecordingStore } from "./stores/audioRecordingStore"; // Keep from jules_wip
 
 function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [errorMessages, setErrorMessages] = useState<ErrorMessage[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [currentRecordingId, setCurrentRecordingId] = useState<string | null>(null);
+  // errorMessages state and utilities from main/previous work
+  const [errorMessages, setErrorMessages] = useState<ErrorMessage[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [showAudioRecordings, setShowAudioRecordings] = useState(false);
   const [audioRecordingsNoteId, setAudioRecordingsNoteId] = useState<string | null>(null);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  // State to trigger focus on search input in Sidebar, activated by Ctrl+F
+  // searchFocusRequested state from jules_wip/previous work for Ctrl+F
   const [searchFocusRequested, setSearchFocusRequested] = useState(false);
 
-  // Get the selected note
   const selectedNote = notes.find(note => note.id === selectedNoteId) || null;
 
-  /**
-   * `errorMessages` stores a list of error messages to be displayed to the user.
-   * Each error has an id and a message.
-   */
-  // Utility function to add a new error message to the list
   const addErrorMessage = useCallback((message: string) => {
     const id = `err_${Date.now()}`;
     setErrorMessages(prevErrors => [...prevErrors, { id, message }]);
   }, []);
 
-  // Utility function to remove an error message by its id
   const removeErrorMessage = useCallback((id: string) => {
     setErrorMessages(prevErrors => prevErrors.filter(error => error.id !== id));
   }, []);
 
-  // Load all notes on component mount
   useEffect(() => {
     const loadNotes = async () => {
       try {
         setIsLoading(true);
         const noteMetadata = await getAllNotes();
-        
-        // Use Promise.allSettled to attempt loading all notes,
-        // even if some individual reads fail.
         const loadedNotesResults = await Promise.allSettled(
           noteMetadata.map(async (meta) => {
             try {
               return await readMarkdownFile(meta.path);
             } catch (error) {
               addErrorMessage(`Error loading note ${meta.title}: ${(error as Error).message}`);
-              // If a note fails to load, a placeholder note is returned.
-              // This allows the app to still function with other notes
-              // while visually indicating the failure for the specific note.
               return {
-                id: meta.id,
-                title: meta.title,
-                path: meta.path,
-                content: `# ${meta.title}\n\nError loading note content.`,
-                createdAt: meta.created_at,
-                updatedAt: meta.updated_at,
-                tags: meta.tags,
+                id: meta.id, title: meta.title, path: meta.path,
+                content: `# ${meta.title}
+
+Error loading note content.`,
+                createdAt: meta.created_at, updatedAt: meta.updated_at, tags: meta.tags,
               } as Note;
             }
           })
         );
-
         const loadedNotes = loadedNotesResults
           .filter(result => result.status === 'fulfilled')
           .map(result => (result as PromiseFulfilledResult<Note>).value);
-
-        const failedNotes = loadedNotesResults
-          .filter(result => result.status === 'rejected')
-          .length;
-
-        if (failedNotes > 0) {
-          // Placeholder notes are already added for failed notes,
-          // addErrorMessage has been called for each in the map.
-        }
-        
         setNotes(loadedNotes);
-        
-        // Select the first note if available and no note is currently selected.
         if (loadedNotes.length > 0 && !selectedNoteId) {
           setSelectedNoteId(loadedNotes[0].id);
         }
@@ -98,97 +77,99 @@ function App() {
         setIsLoading(false);
       }
     };
-    
     loadNotes();
-    // Dependency on selectedNoteId: Reloads notes if selectedNoteId changes.
-    // This might be more frequent than just initial load if selectedNoteId is changed by other means
-    // before notes are fully processed, or if a full refresh on selection change is desired.
-    // For now, this ensures that if `selectedNoteId` was null and notes load, selection happens.
-  }, [addErrorMessage, selectedNoteId]);
+  }, [addErrorMessage, selectedNoteId]); // selectedNoteId dependency is intentional here
 
-  // Set up global keyboard shortcuts
+  const handleSearchFocused = useCallback(() => { // For Ctrl+F
+    setSearchFocusRequested(false);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeElement = document.activeElement;
-      // Check if an input, textarea, or contentEditable element (like the Lexical editor) is focused.
-      // If so, global shortcuts (except Ctrl+F) should not interfere with typing in those fields.
       const isInputFocused = activeElement instanceof HTMLInputElement || 
                              activeElement instanceof HTMLTextAreaElement ||
                              activeElement?.getAttribute('contenteditable') === 'true';
-      
-      // Ctrl+F is a special case: it should focus the search bar regardless of current focus.
+
       if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
-        setSearchFocusRequested(true); // Triggers focus in Sidebar via prop
+        setSearchFocusRequested(true);
         return;
       }
-
-      // If an input is focused, and it's not Ctrl+F, don't process global shortcuts.
       if (isInputFocused) return;
+
+      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); handleNewNote(); }
+      if (e.ctrlKey && e.key === 'd') { e.preventDefault(); handleDailyNote(); }
+      if (e.ctrlKey && e.key === 's') { e.preventDefault(); handleSaveNote(); }
       
-      // Ctrl+N: New note
-      if (e.ctrlKey && e.key === 'n') {
-        e.preventDefault();
-        handleNewNote();
-      }
-      
-      // Ctrl+D: Daily note
-      if (e.ctrlKey && e.key === 'd') {
-        e.preventDefault();
-        handleDailyNote();
-      }
-      
-      // Ctrl+S: Save note
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        handleSaveNote();
-      }
-      
-      // Ctrl+R: Toggle recording
+      // Ctrl+R logic from jules_wip (uses Zustand and direct invoke)
       if (e.ctrlKey && e.key === 'r') {
         e.preventDefault();
-        if (isRecording) {
-          handleStopRecording();
+        const storeState = useAudioRecordingStore.getState();
+        const storeActions = storeState.actions;
+
+        if (storeState.isRecordingActive) {
+          if (storeState.currentRecordingId) {
+            invoke('stop_recording', { recordingId: storeState.currentRecordingId })
+              .then(() => {
+                storeActions.stopRecording();
+                console.log("Global shortcut: Recording stopped.");
+              })
+              .catch(err => {
+                addErrorMessage(`Failed to stop recording: ${(err as Error).message}`);
+                // console.error("Global shortcut: Failed to stop recording via invoke:", err);
+                // Optionally still update UI store state if backend failed
+                storeActions.stopRecording(); // Ensure UI resets
+              });
+          } else {
+            // console.warn("Global shortcut: Stop recording attempted but no currentRecordingId in store.");
+            storeActions.stopRecording(); 
+          }
         } else {
-          handleStartRecording();
+          if (selectedNoteId) {
+            const newRecordingId = uuidv4();
+            getAudioDirectory()
+              .then(audioDir => {
+                // Ensure consistent path construction (e.g. handling separators if audioDir might have trailing slash)
+                // For now, direct concatenation is used as in original jules_wip.
+                const anticipatedFilePath = `${audioDir}/${newRecordingId}.wav`; 
+                return invoke('start_recording', { noteId: selectedNoteId, recordingId: newRecordingId })
+                  .then(() => {
+                    storeActions.startRecording(newRecordingId, anticipatedFilePath);
+                    console.log("Global shortcut: Recording started.");
+                  });
+              })
+              .catch(err => {
+                addErrorMessage(`Failed to start recording: ${(err as Error).message}`);
+                // console.error("Global shortcut: Failed to start recording:", err);
+              });
+          } else {
+            addErrorMessage("Please select a note to start recording.");
+            // console.warn("Global shortcut: Start recording attempted but no note selected.");
+          }
         }
       }
-      
-      // Ctrl+/: Toggle keyboard shortcuts
-      if (e.ctrlKey && e.key === '/') {
-        e.preventDefault();
-        setShowKeyboardShortcuts(prev => !prev);
-      }
-      
-      // Escape: Close modals
-      if (e.key === 'Escape') {
-        setShowKeyboardShortcuts(false);
-      }
+
+      if (e.ctrlKey && e.key === '/') { e.preventDefault(); setShowKeyboardShortcuts(prev => !prev); }
+      if (e.key === 'Escape') { setShowKeyboardShortcuts(false); }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
-    
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isRecording, selectedNoteId]); // searchFocusRequested is not in deps as its effect is managed by handleSearchFocused callback
-
-  /**
-   * Callback for Sidebar to signal that the search input has been focused.
-   * Resets the `searchFocusRequested` state.
-   */
-  const handleSearchFocused = useCallback(() => {
-    setSearchFocusRequested(false);
-  }, []);
+    // Dependencies: selectedNoteId for Ctrl+R, addErrorMessage for error reporting,
+    // handleSearchFocused for Ctrl+F (though it's stable, including it is fine).
+  }, [selectedNoteId, addErrorMessage, handleSearchFocused]);
 
   const handleNewNote = async () => {
     try {
       const title = `New Note ${new Date().toLocaleTimeString()}`;
-      const content = `# ${title}\n\nStart writing here...`;
-      
+      const content = `# ${title}
+
+Start writing here...`;
       const newNote = await createNote(title, content);
-      
-      setNotes([...notes, newNote]);
+      setNotes(prevNotes => [...prevNotes, newNote]);
       setSelectedNoteId(newNote.id);
       setShowAudioRecordings(false);
     } catch (error) {
@@ -199,20 +180,14 @@ function App() {
   const handleDailyNote = async () => {
     try {
       const dailyNote = await createDailyNote();
-      
-      // Check if the note already exists in our list
       const existingNoteIndex = notes.findIndex(note => note.id === dailyNote.id);
-      
       if (existingNoteIndex >= 0) {
-        // Update the existing note
         const updatedNotes = [...notes];
         updatedNotes[existingNoteIndex] = dailyNote;
         setNotes(updatedNotes);
       } else {
-        // Add the new note
-        setNotes([...notes, dailyNote]);
+        setNotes(prevNotes => [...prevNotes, dailyNote]);
       }
-      
       setSelectedNoteId(dailyNote.id);
       setShowAudioRecordings(false);
     } catch (error) {
@@ -220,61 +195,27 @@ function App() {
     }
   };
 
-  const handleStartRecording = async () => {
-    if (!selectedNoteId) return;
-    
-    try {
-      // Generate a unique recording ID
-      const recordingId = `rec_${Date.now()}`;
-      
-      await startRecording(selectedNoteId, recordingId);
-      
-      setIsRecording(true);
-      setCurrentRecordingId(recordingId);
-    } catch (error) {
-      addErrorMessage(`Failed to start recording: ${(error as Error).message}`);
-    }
-  };
-
-  const handleStopRecording = async () => {
-    if (!currentRecordingId) return;
-    
-    try {
-      await stopRecording(currentRecordingId);
-      
-      setIsRecording(false);
-      setCurrentRecordingId(null);
-    } catch (error) {
-      addErrorMessage(`Failed to stop recording: ${(error as Error).message}`);
-    }
-  };
+  // Local handleStartRecording and handleStopRecording are removed (from jules_wip)
 
   const handleSaveNote = async () => {
     if (!selectedNote) return;
-    
     try {
       await writeMarkdownFile(selectedNote.path, selectedNote.content);
-      
-      // Update the note in the list
-      const updatedNotes = notes.map(note => 
-        note.id === selectedNote.id 
-          ? { ...note, updatedAt: new Date().toISOString() } 
-          : note
+      setNotes(prevNotes => 
+        prevNotes.map(note => 
+          note.id === selectedNote.id 
+            ? { ...note, updatedAt: new Date().toISOString() } 
+            : note
+        )
       );
-      
-      setNotes(updatedNotes);
     } catch (error) {
       addErrorMessage(`Failed to save note: ${(error as Error).message}`);
     }
   };
 
-  const handleOpenSettings = () => {
-    // This would normally open a settings modal or page
-    console.log("Opening settings");
-  };
+  const handleOpenSettings = () => { console.log("Opening settings"); };
 
   const handleEditorChange = (content: string) => {
-    // Update the note content when the editor changes
     if (selectedNoteId) {
       setNotes(prevNotes => 
         prevNotes.map(note => 
@@ -293,7 +234,6 @@ function App() {
 
   return (
     <div className="flex h-screen bg-light-bg dark:bg-obsidian-bg text-light-text dark:text-obsidian-text">
-      {/* Sidebar */}
       <div className="w-sidebar flex-shrink-0">
         <Sidebar
           onNewNote={handleNewNote}
@@ -306,64 +246,48 @@ function App() {
           onShowAudioRecordings={handleShowAudioRecordings}
           notes={notes}
           selectedNoteId={selectedNoteId}
-          focusSearchInput={searchFocusRequested}
-          onSearchFocused={handleSearchFocused}
+          focusSearchInput={searchFocusRequested} // For Ctrl+F
+          onSearchFocused={handleSearchFocused}   // For Ctrl+F
         />
       </div>
-
-      {/* Main content */}
       <div className="flex-1 flex flex-col">
-        {/* Top toolbar */}
         <div className="flex items-center justify-end p-2 border-b border-light-border dark:border-obsidian-border bg-light-bg dark:bg-obsidian-bg">
           <div className="flex items-center space-x-2">
-            <Tooltip text="Toggle Theme">
-              <ThemeToggle />
-            </Tooltip>
-            
+            <Tooltip text="Toggle Theme"><ThemeToggle /></Tooltip>
             <Tooltip text="Keyboard Shortcuts (Ctrl+/)">
               <button
                 onClick={() => setShowKeyboardShortcuts(true)}
                 className="p-2 rounded-full hover:bg-light-hover dark:hover:bg-obsidian-hover transition-colors duration-200"
-              >
-                <FiHelpCircle size={18} /> {/* Icon color will inherit from text-light-text/dark:text-obsidian-text */}
-              </button>
+              ><FiHelpCircle size={18} /></button>
             </Tooltip>
-            
             <Tooltip text="Settings">
               <button
                 onClick={handleOpenSettings}
                 className="p-2 rounded-full hover:bg-light-hover dark:hover:bg-obsidian-hover transition-colors duration-200"
-              >
-                <FiSettings size={18} /> {/* Icon color will inherit */}
-              </button>
+              ><FiSettings size={18} /></button>
             </Tooltip>
           </div>
         </div>
-        
-        {/* Content area */}
         <div className="flex-1 overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-light-muted dark:text-obsidian-muted">
               <div className="animate-pulse">Loading notes...</div>
             </div>
           ) : showAudioRecordings && audioRecordingsNoteId ? (
-            <div className="animate-fadeIn">
-              <AudioRecordingsList noteId={audioRecordingsNoteId} />
-            </div>
+            <div className="animate-fadeIn"><AudioRecordingsList noteId={audioRecordingsNoteId} /></div>
           ) : selectedNote ? (
             <div className="h-full animate-fadeIn">
+              {/* Props for EditorContainer from jules_wip */}
               <EditorContainer
                 noteTitle={selectedNote.title}
-                isRecording={isRecording}
-                onStartRecording={handleStartRecording}
-                onStopRecording={handleStopRecording}
+                currentNoteId={selectedNote.id} 
                 onSave={handleSaveNote}
               >
+                {/* Props for LexicalEditor are consistent */}
                 <LexicalEditor 
                   initialContent={selectedNote.content}
                   onChange={handleEditorChange}
-                  currentNoteId={selectedNote.id} // Pass currentNoteId
-                  // isRecording and currentRecordingId are managed by Zustand/Toolbar now
+                  currentNoteId={selectedNote.id}
                 />
               </EditorContainer>
             </div>
@@ -376,14 +300,10 @@ function App() {
           )}
         </div>
       </div>
-      
-      {/* Keyboard shortcuts modal */}
       <KeyboardShortcutsModal 
         isOpen={showKeyboardShortcuts} 
         onClose={() => setShowKeyboardShortcuts(false)} 
       />
-
-      {/* Error Messages Display */}
       {errorMessages.length > 0 && (
         <div className="fixed bottom-4 right-4 w-full max-w-xs space-y-2 z-50">
           {errorMessages.map((error) => (
@@ -396,9 +316,7 @@ function App() {
                 onClick={() => removeErrorMessage(error.id)}
                 className="ml-2 text-red-100 hover:text-white"
                 aria-label="Dismiss error"
-              >
-                &times;
-              </button>
+              >&times;</button>
             </div>
           ))}
         </div>

@@ -3,19 +3,19 @@ import { DecoratorNode } from '@lexical/react/LexicalDecoratorNode';
 import React from 'react';
 import AudioBlockComponent from '../AudioBlockComponent';
 
+// Based on jules_wip: blockId is the node's own key and not part of the external payload for creation.
 export interface AudioBlockPayload {
-  audioFilePath: string; // Changed from audioSrc
-  blockId: string;
-  startTime: number; // startTime will be 0 for manually inserted full snippets
+  audioFilePath: string;
   recordingId: string;
+  startTime: number;
 }
 
 export type SerializedAudioBlockNode = Spread<
   {
-    audioFilePath: string; // Changed from audioSrc
-    blockId: string;
-    startTime: number;
+    audioFilePath: string;
     recordingId: string;
+    startTime: number;
+    blockId: NodeKey; // blockId is the NodeKey, used for serialization/deserialization as the key
     type: 'audio-block';
     version: 1;
   },
@@ -23,10 +23,12 @@ export type SerializedAudioBlockNode = Spread<
 >;
 
 export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
-  __audioFilePath: string; // Changed from __audioSrc
-  __blockId: string;
-  __startTime: number;
+  __audioFilePath: string;
   __recordingId: string;
+  __startTime: number;
+  // __blockId is not stored as a separate property if it's always this.getKey().
+  // If it were needed for some reason before the node is attached, it could be passed,
+  // but standard practice is to rely on getKey() once attached.
 
   static getType(): string {
     return 'audio-block';
@@ -34,31 +36,29 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
 
   static clone(node: AudioBlockNode): AudioBlockNode {
     return new AudioBlockNode(
-      node.__audioFilePath, // Changed from node.__audioSrc
-      node.__blockId,
-      node.__startTime,
+      node.__audioFilePath,
       node.__recordingId,
-      node.__key
+      node.__startTime,
+      node.__key // Pass the original key for a true clone
     );
   }
 
   constructor(
-    audioFilePath: string, // Changed from audioSrc
-    blockId: string,
-    startTime: number,
+    audioFilePath: string,
     recordingId: string,
+    startTime: number,
     key?: NodeKey
   ) {
     super(key);
-    this.__audioFilePath = audioFilePath; // Changed from __audioSrc = audioSrc
-    this.__blockId = blockId;
-    this.__startTime = startTime;
+    this.__audioFilePath = audioFilePath;
     this.__recordingId = recordingId;
+    this.__startTime = startTime;
   }
 
   createDOM(config: EditorConfig): HTMLElement {
     const div = document.createElement('div');
-    div.className = 'editor-audio-block';
+    // Ensure this class matches what's in LexicalEditor's theme if specific styling is desired
+    div.className = config.theme.audioBlock || 'editor-audio-block'; 
     return div;
   }
 
@@ -66,18 +66,29 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
     return false;
   }
 
+  // Method to get the blockId (which is its Lexical key)
+  // This is illustrative; typically, you'd just use .getKey() where needed.
+  getBlockId(): NodeKey {
+    return this.__key; // Or this.getKey()
+  }
+
   static importJSON(serializedNode: SerializedAudioBlockNode): AudioBlockNode {
-    const { audioFilePath, blockId, startTime, recordingId } = serializedNode; // Changed audioSrc
-    const node = new AudioBlockNode(audioFilePath, blockId, startTime, recordingId); // Changed audioSrc
+    // The blockId from JSON is used as the key for the new node.
+    const node = new AudioBlockNode(
+      serializedNode.audioFilePath,
+      serializedNode.recordingId,
+      serializedNode.startTime,
+      serializedNode.blockId // Use blockId from JSON as the key for the new node
+    );
     return node;
   }
 
   exportJSON(): SerializedAudioBlockNode {
     return {
-      audioFilePath: this.__audioFilePath, // Changed from audioSrc: this.__audioSrc
-      blockId: this.__blockId,
-      startTime: this.__startTime,
+      audioFilePath: this.__audioFilePath,
       recordingId: this.__recordingId,
+      startTime: this.__startTime,
+      blockId: this.getKey(), // Use the node's actual key for serialization
       type: 'audio-block',
       version: 1,
     };
@@ -86,9 +97,9 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
   decorate(): React.ReactNode {
     return (
       <AudioBlockComponent 
-        audioFilePath={this.__audioFilePath} // Changed from audioSrc
-        blockId={this.__blockId}
-        startTime={this.__startTime} // This will be 0 for manually inserted full audio files
+        audioFilePath={this.__audioFilePath}
+        blockId={this.getKey()} // Pass the node's key as blockId to component
+        startTime={this.__startTime}
         recordingId={this.__recordingId}
       />
     );
@@ -96,12 +107,13 @@ export class AudioBlockNode extends DecoratorNode<React.ReactNode> {
 }
 
 export function $createAudioBlockNode(
-  audioFilePath: string, // Changed from audioSrc
-  blockId: string,
-  startTime: number, // Should typically be 0 for new manual insertions
-  recordingId: string
+  audioFilePath: string,
+  recordingId: string,
+  startTime: number
 ): AudioBlockNode {
-  return new AudioBlockNode(audioFilePath, blockId, startTime, recordingId); // Changed audioSrc
+  // blockId (NodeKey) is generated by Lexical automatically when the node is created.
+  // We don't pass an explicit blockId string here.
+  return new AudioBlockNode(audioFilePath, recordingId, startTime);
 }
 
 export function $isAudioBlockNode(
@@ -109,4 +121,3 @@ export function $isAudioBlockNode(
 ): node is AudioBlockNode {
   return node instanceof AudioBlockNode;
 }
-

@@ -22,7 +22,7 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen,
     { key: 'Ctrl+Shift+L', description: 'Insert bullet list' },
     { key: 'Ctrl+Shift+N', description: 'Insert numbered list' },
     { key: 'Ctrl+R', description: 'Start/stop recording' },
-    { key: 'Ctrl+T', description: 'Insert timestamp during recording' },
+    // { key: 'Ctrl+T', description: 'Insert timestamp during recording' }, // Removed
     { key: 'Ctrl+D', description: 'Create daily note' },
     { key: 'Esc', description: 'Close modal or cancel current action' },
   ];

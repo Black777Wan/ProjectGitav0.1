@@ -29,6 +29,7 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
    * 2. Saves the current theme preference to `localStorage`.
    */
   useEffect(() => {
+    // Use main's version for this block
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
@@ -45,13 +46,14 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
     <button
       onClick={toggleTheme}
       // Update button styling to be theme-aware
-      className={`p-2 rounded-full hover:bg-light-hover dark:hover:bg-obsidian-hover transition-colors duration-200 ${className}`}
+      className={`p-2 rounded-full hover:bg-light-hover dark:hover:bg-obsidian-hover text-light-text dark:text-obsidian-text transition-colors duration-200 ${className}`}
       title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
     >
-      {isDarkMode ? <FiSun size={18} className="text-obsidian-text" /> : <FiMoon size={18} className="text-light-text" />}
+      {/* Use jules_wip version for icons to make them theme-aware, but simplify class if parent handles color */}
+      {/* The button itself now has text-light-text dark:text-obsidian-text, so icons should inherit */}
+      {isDarkMode ? <FiSun size={18} /> : <FiMoon size={18} />}
     </button>
   );
 };
 
 export default ThemeToggle;
-

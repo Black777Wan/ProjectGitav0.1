@@ -53,6 +53,6 @@ export async function createDailyNote(): Promise<Note> {
 
 // Find backlinks for a note
 export async function findBacklinks(noteId: string): Promise<NoteMetadata[]> {
-  return invoke('find_backlinks', { noteId });
+  return invoke('find_backlinks', { note_id: noteId });
 }
 

@@ -8,106 +8,129 @@ import {
   NodeKey,
   NodeMutation,
   LexicalEditor,
+  $createParagraphNode, // From jules_wip
+  $isRootNode,          // From jules_wip
+  // ElementNode,       // ElementNode from jules_wip not strictly needed if using specific types
 } from 'lexical';
 import { useAudioRecordingStore } from '../../../../stores/audioRecordingStore';
 import { invoke } from '@tauri-apps/api/tauri';
+import { $createAudioBlockNode } from '../nodes/AudioBlockNode'; // From jules_wip
 
-// Helper function to check if a node is a "taggable" block type
-const isTaggableBlockNode = (node: any): boolean => {
-  return node && ($isParagraphNode(node) || $isHeadingNode(node) || $isListItemNode(node));
+// Helper function to check if a node is a "taggable" block type that should be replaced by an AudioBlockNode
+// (from jules_wip)
+const isReplaceableEmptyBlock = (node: any): boolean => {
+  if (!node) return false;
+  // Only target empty Paragraphs, Headings, or ListItems for replacement
+  if (($isParagraphNode(node) || $isHeadingNode(node) || $isListItemNode(node)) && node.getChildrenSize() === 0) {
+    // Further check: ensure it's a direct child of root or a list,
+    // to avoid replacing nodes nested deeply in other structures unexpectedly.
+    const parent = node.getParent();
+    return parent && ($isRootNode(parent) || parent.getType() === 'list');
+  }
+  return false;
 };
+
 
 export default function AutoTimestampPlugin(): null {
   const [editor] = useLexicalComposerContext();
-  const { isRecordingActive, currentRecordingId, currentRecordingOffsetMs } = useAudioRecordingStore(
+  const {
+    isRecordingActive,
+    currentRecordingId,
+    currentRecordingOffsetMs,
+    currentRecordingFilePath // Get the file path (from jules_wip)
+  } = useAudioRecordingStore(
     (state) => ({
       isRecordingActive: state.isRecordingActive,
       currentRecordingId: state.currentRecordingId,
       currentRecordingOffsetMs: state.currentRecordingOffsetMs,
+      currentRecordingFilePath: state.currentRecordingFilePath, // From jules_wip
     })
   );
 
-  // Keep track of nodes processed for the current recording to avoid duplicates
   const [processedNodesForCurrentRecording, setProcessedNodesForCurrentRecording] = useState<Set<NodeKey>>(new Set());
-
-  // Store the recording ID for which nodes were processed to reset the set on new recording
   const lastProcessedRecordingIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!editor) return;
 
-    // If recording ID changes, reset the processed nodes set
     if (currentRecordingId !== lastProcessedRecordingIdRef.current) {
       setProcessedNodesForCurrentRecording(new Set());
       lastProcessedRecordingIdRef.current = currentRecordingId;
     }
 
-    if (!isRecordingActive || !currentRecordingId) {
-      // If not recording, or no recording ID, nothing to do with mutations.
-      // Also, if we just stopped recording, we might want to clear the processed set
-      // (handled by currentRecordingId change check above for new recordings).
+    // Logic from jules_wip
+    if (!isRecordingActive || !currentRecordingId || !currentRecordingFilePath) {
       return;
     }
 
     const unregisterMutationListener = editor.registerMutationListener(
-      (mutatedNodes: Map<NodeKey, NodeMutation>, anEditor: LexicalEditor) => {
-        // We need to ensure we are working with the latest editor state within this callback
-        anEditor.getEditorState().read(() => {
-          if (!isRecordingActive || !currentRecordingId || currentRecordingOffsetMs === undefined || currentRecordingOffsetMs === null) {
-            // Check again, state might have changed
+      (mutatedNodes: Map<NodeKey, NodeMutation>, editorInstance: LexicalEditor) => {
+        editorInstance.getEditorState().read(() => {
+          const freshStoreState = useAudioRecordingStore.getState();
+          if (
+            !freshStoreState.isRecordingActive ||
+            !freshStoreState.currentRecordingId ||
+            !freshStoreState.currentRecordingFilePath ||
+            freshStoreState.currentRecordingOffsetMs === undefined ||
+            freshStoreState.currentRecordingOffsetMs === null 
+          ) {
             return;
           }
 
           for (const [nodeKey, mutation] of mutatedNodes) {
-            if (mutation === 'created' && !processedNodesForCurrentRecording.has(nodeKey)) {
-              const node = $getNodeByKey(nodeKey);
+            if (processedNodesForCurrentRecording.has(nodeKey)) {
+                continue;
+            }
 
-              if (isTaggableBlockNode(node)) {
-                // Additional check: ensure the node doesn't have a child that's already an audio block or similar decorator
-                // This is a simple check; more robust logic might be needed for complex cases.
-                let hasExistingAudioControl = false;
-                if (node && typeof (node as any).getChildren === 'function') {
-                    const children = (node as any).getChildren();
-                    for (const child of children) {
-                        if (child.getType() === 'audio-block') { // Assuming 'audio-block' is the type of AudioBlockNode
-                            hasExistingAudioControl = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasExistingAudioControl) {
-                    console.log(`AutoTimestamp: Node ${nodeKey} already contains an audio control, skipping.`);
-                    setProcessedNodesForCurrentRecording(prev => new Set(prev).add(nodeKey)); // Mark as processed to avoid re-checking
-                    continue;
-                }
+            if (mutation === 'created') {
+              const createdNode = $getNodeByKey(nodeKey);
 
-
-                const blockId = nodeKey; // Lexical node key can serve as blockId
-                const timestampData = {
-                  recordingId: currentRecordingId,
-                  offsetMs: currentRecordingOffsetMs,
-                };
-
-                console.log(
-                  `AutoTimestamp: New block (type: ${node?.getType()}, key: ${blockId}) created. Tagging with audio:`,
-                  timestampData
+              if (isReplaceableEmptyBlock(createdNode)) {
+                const audioBlockNode = $createAudioBlockNode(
+                  freshStoreState.currentRecordingFilePath,
+                  freshStoreState.currentRecordingId,
+                  freshStoreState.currentRecordingOffsetMs
                 );
 
-                invoke('create_audio_block_reference', {
-                  recordingId: timestampData.recordingId,
-                  blockId: blockId,
-                  audioOffsetMs: timestampData.offsetMs,
-                })
-                  .then(() => {
-                    console.log(`AutoTimestamp: Successfully created audio block reference for block ${blockId}`);
-                  })
-                  .catch(err => {
-                    console.error(`AutoTimestamp: Failed to create audio block reference in DB for block ${blockId}:`, err);
-                  });
+                // This must be done in a editor.update() call
+                editor.update(() => {
+                    const nodeToReplace = $getNodeByKey(nodeKey); 
+                    if (nodeToReplace && isReplaceableEmptyBlock(nodeToReplace)) { 
+                        nodeToReplace.replace(audioBlockNode);
 
-                // Add to processed set for this recording session
-                // Use functional update for setProcessedNodes to ensure we have the latest set
-                setProcessedNodesForCurrentRecording(prev => new Set(prev).add(nodeKey));
+                        const newParagraph = $createParagraphNode();
+                        audioBlockNode.insertAfter(newParagraph);
+                        // Consider selecting the new paragraph for immediate typing
+                        // newParagraph.select(); // This might need to be editor.setSelection(...) after node is attached
+
+                        console.log(
+                            `AutoTimestamp: Replaced new block (Key: ${nodeKey}) with AudioBlockNode (Key: ${audioBlockNode.getKey()}). ` +
+                            `File: ${freshStoreState.currentRecordingFilePath}, ` +
+                            `RecID: ${freshStoreState.currentRecordingId}, ` +
+                            `Offset: ${freshStoreState.currentRecordingOffsetMs}`
+                        );
+
+                        invoke('create_audio_block_reference', {
+                          recordingId: freshStoreState.currentRecordingId!, // Non-null asserted due to checks
+                          blockId: audioBlockNode.getKey(), 
+                          audioOffsetMs: freshStoreState.currentRecordingOffsetMs,
+                        })
+                          .then(() => {
+                            console.log(`AutoTimestamp: Successfully created DB reference for AudioBlock ${audioBlockNode.getKey()}`);
+                          })
+                          .catch(err => {
+                            console.error(`AutoTimestamp: Failed to create DB reference for AudioBlock ${audioBlockNode.getKey()}:`, err);
+                          });
+                        
+                        // Add the NEW AudioBlockNode's key to processed set
+                        // Must use functional update for useState when depending on previous state
+                        setProcessedNodesForCurrentRecording(prev => new Set(prev).add(audioBlockNode.getKey()));
+                    }
+                }, { tag: 'auto-timestamp-insert' }); 
+                
+                // Break after handling one replaceable block to avoid complex cascading updates within a single mutation event.
+                // The plugin will catch subsequent creations if necessary.
+                break; 
               }
             }
           }
@@ -118,9 +141,8 @@ export default function AutoTimestampPlugin(): null {
     return () => {
       unregisterMutationListener();
     };
-  // Ensure dependencies cover all reactive values from store and editor.
-  // currentRecordingOffsetMs is included because its value at the time of creation is important.
-  }, [editor, isRecordingActive, currentRecordingId, currentRecordingOffsetMs, processedNodesForCurrentRecording]);
+  }, [editor, isRecordingActive, currentRecordingId, currentRecordingFilePath, currentRecordingOffsetMs, processedNodesForCurrentRecording, setProcessedNodesForCurrentRecording]);
+  // Added setProcessedNodesForCurrentRecording to dep array as it's used in an update
 
   return null;
 }
