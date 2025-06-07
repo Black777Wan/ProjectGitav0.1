@@ -17,26 +17,32 @@ pub struct Block {
 
 pub async fn create_block(
     pool: &PgPool,
+    id: Uuid, // Accept the ID from content_json
     page_id: Uuid,
     parent_block_id: Option<Uuid>,
     block_type: Option<&str>,
 ) -> Result<Uuid, DalError> {
-    let new_id = Uuid::new_v4();
-    let query_result = sqlx::query!(
+    // The 'id' is now provided, not generated.
+    sqlx::query!(
         r#"
         INSERT INTO blocks (id, page_id, parent_block_id, block_type, created_at, updated_at)
         VALUES ($1, $2, $3, $4, now(), now())
-        RETURNING id
+        ON CONFLICT (id) DO NOTHING
+        -- If a block with this ID somehow already exists (e.g. from a previous failed sync or different page),
+        -- DO NOTHING to prevent error. Or, consider DO UPDATE if attributes might change.
+        -- For now, DO NOTHING is safer if IDs are globally unique and shouldn't be re-inserted.
+        -- If IDs are only unique per page, then ON CONFLICT (id, page_id) might be better.
+        -- However, block IDs from Lexical are expected to be unique.
         "#,
-        new_id,
+        id, // Use the provided id
         page_id,
         parent_block_id,
         block_type
     )
-    .fetch_one(pool)
+    .execute(pool) // Use execute instead of fetch_one as ON CONFLICT DO NOTHING might not return a row
     .await?;
 
-    Ok(query_result.id)
+    Ok(id) // Return the provided id
 }
 
 pub async fn get_block(pool: &PgPool, id: Uuid) -> Result<Option<Block>, DalError> {
@@ -118,6 +124,22 @@ pub async fn update_block(
 
     let result = query.execute(pool).await?;
     Ok(result.rows_affected() > 0)
+}
+
+pub async fn get_page_id_for_block(pool: &PgPool, block_id: Uuid) -> Result<Option<Uuid>, DalError> {
+    let result = sqlx::query!(
+        r#"
+        SELECT page_id
+        FROM blocks
+        WHERE id = $1
+        "#,
+        block_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    // query! returns a record-like struct, so access page_id field, then map to Option<Uuid>
+    Ok(result.map(|row| row.page_id))
 }
 
 pub async fn delete_block(pool: &PgPool, id: Uuid) -> Result<bool, DalError> {

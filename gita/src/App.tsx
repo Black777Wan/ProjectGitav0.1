@@ -10,8 +10,10 @@ import { Note } from "./types"; // ErrorMessage removed
 import { useErrorMessages } from './hooks/useErrorMessages'; // Import the new hook
 import { 
   getAllNotes, 
-  readMarkdownFile, 
-  writeMarkdownFile, 
+  // readMarkdownFile, // Removed
+  // writeMarkdownFile, // Removed
+  getPageDetails,  // Added
+  updatePageContent, // Added
   createNote, 
   createDailyNote, 
   deleteNote
@@ -20,6 +22,7 @@ import { FiHelpCircle, FiSettings } from "react-icons/fi";
 import Tooltip from "./components/Tooltip";
 import ErrorDisplay from './components/ErrorDisplay'; // Import ErrorDisplay
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'; // Import the new hook
+import { convertLexicalJSONToMarkdown } from "../utils/lexicalUtils"; // Added import
 
 function App() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -35,41 +38,60 @@ function App() {
   const selectedNote = notes.find(note => note.id === selectedNoteId) || null;
 
   useEffect(() => {
-    const loadNotes = async () => {
+    const loadInitialNotesMetadata = async () => {
       try {
         setIsLoading(true);
-        const noteMetadata = await getAllNotes();
-        const loadedNotesResults = await Promise.allSettled(
-          noteMetadata.map(async (meta) => {
-            try {
-              return await readMarkdownFile(meta.path);
-            } catch (error) {
-              addErrorMessage(`Error loading note ${meta.title}: ${(error as Error).message}`); // Now uses hook's addErrorMessage
-              return {
-                id: meta.id, title: meta.title, path: meta.path,
-                content: `# ${meta.title}
+        const noteMetadata = await getAllNotes(); // Returns NoteMetadata[]
+        const placeholderNotes: Note[] = noteMetadata.map(meta => ({
+          id: meta.id,
+          title: meta.title,
+          created_at: meta.created_at,
+          updated_at: meta.updated_at,
+          content_json: '', // Placeholder, will be loaded on demand
+          // raw_markdown: '', // Optional placeholder, can be omitted
+        }));
+        setNotes(placeholderNotes);
 
-Error loading note content.`,
-                createdAt: meta.created_at, updatedAt: meta.updated_at, tags: meta.tags,
-              } as Note;
-            }
-          })
-        );
-        const loadedNotes = loadedNotesResults
-          .filter(result => result.status === 'fulfilled')
-          .map(result => (result as PromiseFulfilledResult<Note>).value);
-        setNotes(loadedNotes);
-        if (loadedNotes.length > 0 && !selectedNoteId) {
-          setSelectedNoteId(loadedNotes[0].id);
+        if (placeholderNotes.length > 0 && !selectedNoteId) {
+          setSelectedNoteId(placeholderNotes[0].id);
         }
+        // If selectedNoteId already exists (e.g. from previous session state, not implemented here),
+        // the other useEffect will pick it up and load its full content.
       } catch (error) {
-        addErrorMessage(`Error loading notes: ${(error as Error).message}`);
+        addErrorMessage(`Error loading initial notes: ${(error as Error).message}`);
       } finally {
         setIsLoading(false);
       }
     };
-    loadNotes();
-  }, [addErrorMessage, selectedNoteId]); // selectedNoteId dependency is intentional here
+    loadInitialNotesMetadata();
+  }, [addErrorMessage]); // Removed selectedNoteId, this effect is for initial metadata load
+
+  // New useEffect to load full note data when selectedNoteId changes
+  useEffect(() => {
+    if (selectedNoteId) {
+      const noteInState = notes.find(n => n.id === selectedNoteId);
+      // Only fetch if content_json is placeholder (empty string)
+      if (noteInState && noteInState.content_json === '') {
+        // Consider adding a specific loading state for content if global `isLoading` is too broad
+        // setIsLoading(true); // Or e.g. setIsLoadingSelectedNoteContent(true)
+        getPageDetails(selectedNoteId)
+          .then(fullNoteData => {
+            setNotes(prevNotes => prevNotes.map(n => (n.id === selectedNoteId ? fullNoteData : n)));
+          })
+          .catch(error => {
+            addErrorMessage(`Error loading note details for ${selectedNoteId}: ${(error as Error).message}`);
+            // Optionally, clear selectedNoteId or handle this error more gracefully
+            // For example, revert to a state where the note content is known to be unloadable
+          })
+          .finally(() => {
+            // setIsLoading(false); // Or e.g. setIsLoadingSelectedNoteContent(false)
+            // Global isLoading might be set to false too early if other things depend on it.
+            // For now, the initial load handles the main isLoading.
+          });
+      }
+    }
+  }, [selectedNoteId, notes, addErrorMessage]);
+
 
   const handleSearchFocused = useCallback(() => { // For Ctrl+F
     setSearchFocusRequested(false);
@@ -78,10 +100,10 @@ Error loading note content.`,
   const handleNewNote = useCallback(async () => {
     try {
       const title = `New Note ${new Date().toLocaleTimeString()}`;
-      const content = `# ${title}
-
-Start writing here...`;
-      const newNote = await createNote(title, content);
+      // For createNote, we now send initialRawMarkdown.
+      // Backend's create_note will handle creating a default content_json.
+      const initialRawMarkdown = `# ${title}\n\nStart writing here...`;
+      const newNote = await createNote(title, initialRawMarkdown); // newNote is a full Note object
       setNotes(prevNotes => [...prevNotes, newNote]);
       setSelectedNoteId(newNote.id);
       setShowAudioRecordings(false);
@@ -92,33 +114,47 @@ Start writing here...`;
 
   const handleDailyNote = useCallback(async () => {
     try {
-      const dailyNote = await createDailyNote();
-      const existingNoteIndex = notes.findIndex(note => note.id === dailyNote.id);
+      const dailyNoteFull = await createDailyNote(); // Returns a full Note object
+      const existingNoteIndex = notes.findIndex(note => note.id === dailyNoteFull.id);
       if (existingNoteIndex >= 0) {
-        const updatedNotes = [...notes];
-        updatedNotes[existingNoteIndex] = dailyNote;
-        setNotes(updatedNotes);
+        // If it exists, update it in the list (it might have been a placeholder)
+        setNotes(prevNotes =>
+          prevNotes.map(n => n.id === dailyNoteFull.id ? dailyNoteFull : n)
+        );
       } else {
-        setNotes(prevNotes => [...prevNotes, dailyNote]);
+        setNotes(prevNotes => [...prevNotes, dailyNoteFull]);
       }
-      setSelectedNoteId(dailyNote.id);
+      setSelectedNoteId(dailyNoteFull.id);
       setShowAudioRecordings(false);
     } catch (error) {
       addErrorMessage(`Error creating daily note: ${(error as Error).message}`);
     }
-  }, [addErrorMessage, notes]);
+  }, [addErrorMessage, notes]); // notes dependency needed if checking existingNoteIndex
 
   const handleSaveNote = useCallback(async () => {
-    if (!selectedNote) return;
+    if (!selectedNote || selectedNote.content_json === '') {
+      // Do not save if note is not fully loaded or no content_json
+      addErrorMessage("Note content not fully loaded or empty. Cannot save.");
+      return;
+    }
     try {
-      await writeMarkdownFile(selectedNote.path, selectedNote.content);
+      // Assuming selectedNote.content_json is already a string.
+      // selectedNote.raw_markdown might be undefined, which is fine for updatePageContent.
+      await updatePageContent(
+        selectedNote.id,
+        selectedNote.title,
+        selectedNote.content_json, // This is already a string from Lexical
+        selectedNote.raw_markdown
+      );
+      // Optionally, update the updated_at timestamp from backend if returned, or use client time
       setNotes(prevNotes =>
         prevNotes.map(note =>
           note.id === selectedNote.id
-            ? { ...note, updatedAt: new Date().toISOString() }
+            ? { ...note, updated_at: new Date().toISOString() } // Use client time for now
             : note
         )
       );
+      // addSuccessMessage("Note saved successfully!"); // If you have a success message system
     } catch (error) {
       addErrorMessage(`Failed to save note: ${(error as Error).message}`);
     }
@@ -137,12 +173,18 @@ Start writing here...`;
 
   const handleOpenSettings = () => { console.log("Opening settings"); };
 
-  const handleEditorChange = (content: string) => {
+  const handleEditorChange = (lexicalJsonString: string) => {
     if (selectedNoteId) {
-      setNotes(prevNotes => 
-        prevNotes.map(note => 
-          note.id === selectedNoteId 
-            ? { ...note, content, updatedAt: new Date().toISOString() } 
+      const newRawMarkdown = convertLexicalJSONToMarkdown(lexicalJsonString);
+      setNotes(prevNotes =>
+        prevNotes.map(note =>
+          note.id === selectedNoteId
+            ? {
+                ...note,
+                content_json: lexicalJsonString,
+                raw_markdown: newRawMarkdown, // Update raw_markdown here
+                updated_at: new Date().toISOString()
+              }
             : note
         )
       );
@@ -233,9 +275,11 @@ Start writing here...`;
               {/* Props for EditorContainer from jules_wip */}
               <EditorContainer
                 noteTitle={selectedNote.title}
+                currentNoteId={selectedNote.id}
               >
-                {/* Props for LexicalEditor are consistent */}                <LexicalEditor 
-                  initialContent={selectedNote.content}
+                <LexicalEditor
+                  key={selectedNote.id} // Ensure LexicalEditor re-initializes if note ID changes
+                  initialContent={selectedNote.content_json} // Pass content_json
                   onChange={handleEditorChange}
                   currentNoteId={selectedNote.id}
                   onDeleteNote={handleDeleteNote}
@@ -244,7 +288,7 @@ Start writing here...`;
             </div>
           ) : (
             <div className="flex items-center justify-center h-full text-light-muted dark:text-obsidian-muted">
-              {notes.length > 0 
+              {notes.length > 0 || isLoading // Show "Select a note..." even if notes are loading
                 ? "Select a note or create a new one" 
                 : "No notes found. Create a new note to get started."}
             </div>

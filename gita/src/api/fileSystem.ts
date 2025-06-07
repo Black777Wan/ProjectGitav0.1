@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Note, NoteMetadata } from '../types';
+import { Note, NoteMetadata, BlockReference } from '../types'; // Added BlockReference
 
 // Get the notes directory
 export async function getNotesDirectory(): Promise<string> {
@@ -31,19 +31,41 @@ export async function searchNotes(query: string): Promise<NoteMetadata[]> {
   return invoke('search_notes', { query });
 }
 
-// Read a note content
-export async function readNoteContent(path: string): Promise<Note> {
-  return invoke('read_note_content', { path });
+// Get full page details (replaces readNoteContent)
+export async function getPageDetails(noteId: string): Promise<Note> {
+  // Backend returns CommandPage which should map to the updated Note type
+  return invoke('get_page_details', { id: noteId });
 }
 
-// Write a note content
-export async function writeNoteContent(path: string, content: Note): Promise<void> {
-  return invoke('write_note_content', { path, content });
+// Update page content (replaces writeNoteContent)
+export async function updatePageContent(
+  noteId: string,
+  title: string,
+  contentJsonString: string, // Lexical JSON state as a string
+  rawMarkdown?: string
+): Promise<boolean> {
+  try {
+    const contentJson = JSON.parse(contentJsonString); // Parse string to JSON object
+    return invoke('update_page_content', {
+      id: noteId,
+      title,
+      contentJson, // Pass the parsed JSON object
+      rawMarkdown,
+    });
+  } catch (error) {
+    console.error("Error parsing contentJson string before sending to backend:", error);
+    // Propagate the error or return false, depending on desired error handling
+    // For now, let's rethrow, assuming the caller handles it or it bubbles up.
+    // Alternatively, return Promise.reject(error) or a custom error structure.
+    throw new Error("Invalid content_json format.");
+  }
 }
 
 // Create a new note
-export async function createNote(title: string, content: Note): Promise<Note> {
-  return invoke('create_note', { title, content });
+export async function createNote(title: string, initialRawMarkdown: string): Promise<Note> {
+  // Backend create_note expects title and initial raw markdown (content).
+  // It returns a CommandPage which should map to the updated Note type.
+  return invoke('create_note', { title, content: initialRawMarkdown });
 }
 
 // Create a daily note
@@ -61,3 +83,7 @@ export async function findBacklinks(noteId: string): Promise<NoteMetadata[]> {
   return invoke('find_backlinks', { note_id: noteId });
 }
 
+// Get references for a block
+export async function getReferencesForBlock(blockId: string): Promise<BlockReference[]> {
+  return invoke('get_references_for_block', { blockId });
+}
