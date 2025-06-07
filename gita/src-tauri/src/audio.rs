@@ -4,7 +4,7 @@ use ringbuf::{HeapRb, Producer, Consumer};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicUsize}};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tauri::command;
@@ -19,8 +19,10 @@ struct RecordingState {
     note_id: String,
     file_path: PathBuf,
     writer: Arc<Mutex<Option<hound::WavWriter<BufWriter<File>>>>>,
-    mic_stream: Option<cpal::Stream>, // These are !Send, managed by their thread.
-    loopback_stream: Option<cpal::Stream>, // These are !Send, managed by their thread.
+    // mic_stream: Option<cpal::Stream>, // These are !Send, managed by their thread.
+    // loopback_stream: Option<cpal::Stream>, // These are !Send, managed by their thread.
+    mic_stream_thread: Option<JoinHandle<()>>,
+    loopback_stream_thread: Option<JoinHandle<()>>,
     writer_thread: Option<JoinHandle<()>>,
     stop_signal: Arc<AtomicBool>,
     mic_device_identifier: String, // Name or other unique ID
@@ -32,13 +34,14 @@ lazy_static::lazy_static! {
     // Global host, initialized on first use. Keep it alive for callbacks.
     static ref GLOBAL_HOST: Mutex<Option<cpal::Host>> = Mutex::new(None);
     // Ensures devices_changed_callback is registered only once.
-    static ref DEVICE_CHANGE_LISTENER_REGISTERED: AtomicBool = AtomicBool::new(false);
+    // static ref DEVICE_CHANGE_LISTENER_REGISTERED: AtomicBool = AtomicBool::new(false);
 }
 
 
 // This callback function will be invoked by CPAL when audio devices change.
 // It needs to be `Send + 'static` if it's registered globally.
 // To interact with ACTIVE_RECORDINGS, it must be carefully designed.
+/*
 fn devices_changed_callback(host_id: cpal::HostId) {
     println!("Audio devices changed for host: {:?}", host_id);
 
@@ -129,7 +132,7 @@ fn devices_changed_callback(host_id: cpal::HostId) {
         }
     }
 }
-
+*/
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AudioRecording {
@@ -149,142 +152,82 @@ pub struct AudioBlockReference {
 }
 
 // Start recording audio
-#[command]
 pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Result<String, String> {
-    // --- Host Initialization and Device Change Listener Registration ---
-    let host = {
+    // --- Device Variables ---
+    let mic_device: cpal::Device;
+    let mut available_input_devices: Vec<cpal::Device> = Vec::new();
+    // loopback_device and loopback_device_identifier are determined after host lock.
+
+    // --- Host Initialization and Device Enumeration Scope ---
+    { // New scope to limit the lifetime of host_guard and host_ref
         let mut host_guard = GLOBAL_HOST.lock().unwrap();
         if host_guard.is_none() {
             println!("Initializing global CPAL host.");
             *host_guard = Some(cpal::default_host());
         }
-        host_guard.as_ref().unwrap().clone() // Clone the host for use in this function
-    };
+        let host_ref = host_guard.as_ref().expect("GLOBAL_HOST should be initialized after check");
 
-    // Register device change callback if not already done.
-    // This is specific to Windows for now as per subtask requirements.
-    if cfg!(windows) && !DEVICE_CHANGE_LISTENER_REGISTERED.load(Ordering::Relaxed) {
-        // The callback registration requires the host to live as long as the callback might be called.
-        // Using a global host stored in lazy_static helps with this.
-        // The callback itself must be Send + 'static.
-        // Note: cpal documentation implies that the callback is called on a special system thread.
-        // We must be careful with locking and long operations inside the callback.
-        match host.devices_changed_event_stream() {
-            Ok(stream) => {
-                 // Keep the stream alive. If it's dropped, events are no longer delivered.
-                 // This needs a more robust way to keep it alive for the duration of the app.
-                 // For now, let's leak it. This is not ideal for production.
-                 // A better approach might involve a dedicated thread that owns the stream
-                 // and uses channels to communicate with the rest of the app, or manage its lifetime
-                 // with the application lifecycle.
-                 // Given the current structure, direct registration with a 'static callback is simpler.
-                // The host itself is 'static due to lazy_static.
-                // The callback registration is tricky with lifetimes if host is not 'static.
-                // Let's assume the host obtained from GLOBAL_HOST is effectively 'static for this.
-                // This part of cpal's API might need careful handling of lifetimes or specific patterns.
-                // For now, we rely on the 'static nature of the GLOBAL_HOST's content.
-                // The callback `devices_changed_callback` is defined globally.
-                // Cpal's `run_event_loop_on_display_serial` or similar might be relevant for some platforms
-                // but `devices_changed_event_stream` seems more direct for this.
-                // The core issue is ensuring the Host outlives the callback registration.
-                // By storing Host in a static Mutex, it should.
-                // The event stream must be consumed or it might block/stop.
-                // Spawning a thread to consume it:
-                std::thread::spawn(move || {
-                    let event_stream = host.devices_changed_event_stream().unwrap(); // Re-create stream for this thread
-                    println!("Device event stream listener thread started.");
-                    for event in event_stream {
-                        match event {
-                            Ok(cpal::DevicesChangedEvent::DevicesChanged) => {
-                                devices_changed_callback(host.id());
+        println!("Selected host: {}", host_ref.id().name());
+        println!("Probing for available input devices...");
+        match host_ref.input_devices() {
+            Ok(devices) => {
+                for (idx, device_candidate) in devices.enumerate() {
+                    match device_candidate.name() {
+                        Ok(name) => {
+                            let mut log_line = format!("  Input Device {}: \"{}\"", idx, name);
+                            if let Ok(config) = device_candidate.default_input_config() {
+                                log_line.push_str(&format!(" (Default config: {} channels, {} Hz, {:?})", config.channels(), config.sample_rate().0, config.sample_format()));
                             }
-                            Err(e) => {
-                                eprintln!("Error in device event stream: {}", e);
-                            }
+                            println!("{}", log_line);
+                            available_input_devices.push(device_candidate.clone()); // Clone for use after lock
                         }
+                        Err(e) => println!("  Input Device {}: Error getting name: {}", idx, e),
                     }
-                    println!("Device event stream listener thread finished.");
-                });
-
-                DEVICE_CHANGE_LISTENER_REGISTERED.store(true, Ordering::Relaxed);
-                println!("Device change listener registered.");
-            }
-            Err(e) => {
-                eprintln!("Failed to get device changed event stream: {}. Device change detection will not work.", e);
-                // Proceed without device change detection if stream fails.
-            }
-        }
-    }
-
-
-    // --- Device Enumeration (using the already acquired host instance) ---
-    println!("Selected host: {}", host.id().name());
-    println!("Probing for available input devices...");
-    let mut available_input_devices = Vec::new();
-    match host.input_devices() {
-        Ok(devices) => {
-            for (idx, device) in devices.enumerate() {
-                match device.name() {
-                    Ok(name) => {
-                        let mut log_line = format!("  Input Device {}: \"{}\"", idx, name);
-                        // Attempt to get default input config for more details
-                        if let Ok(config) = device.default_input_config() {
-                            log_line.push_str(&format!(" (Default config: {} channels, {} Hz, {:?})", config.channels(), config.sample_rate().0, config.sample_format()));
-                        }
-                        println!("{}", log_line);
-                        available_input_devices.push(device.clone()); // Clone device for further processing if needed
-
-                        // Platform-specific keyword checks for potential loopback devices (logging only)
-                        if cfg!(target_os = "macos") {
-                            let macos_keywords = ["BlackHole", "Soundflower", "Loopback Audio", "Aggregate Device", "Multi-Output Device"];
-                            for keyword in &macos_keywords {
-                                if name.to_lowercase().contains(&keyword.to_lowercase()) {
-                                    println!("    (Potential macOS loopback candidate by keyword '{}')", keyword);
-                                    break;
-                                }
-                            }
-                        } else if cfg!(target_os = "linux") {
-                            let linux_keywords = ["Monitor of", "Loopback"]; // PulseAudio/PipeWire often use "Monitor of..."
-                            for keyword in &linux_keywords {
-                                if name.contains(keyword) { // Case-sensitive might be better for "Monitor of"
-                                    println!("    (Potential Linux loopback candidate by keyword '{}')", keyword);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => println!("  Input Device {}: Error getting name: {}", idx, e),
                 }
             }
+            Err(e) => {
+                return Err(format!("Failed to enumerate input devices: {}", e));
+            }
         }
-        Err(e) => {
-            return Err(format!("Failed to enumerate input devices: {}", e));
+
+        if available_input_devices.is_empty() {
+            return Err("No input devices found.".to_string());
         }
-    }
 
-    if available_input_devices.is_empty() {
-        return Err("No input devices found.".to_string());
-    }
+        mic_device = host_ref.default_input_device()
+            .ok_or_else(|| "No default microphone input device available".to_string())?;
+        // mic_device is cloned here by ok_or_else -> ok -> map, or default_input_device itself might return owned/cloned.
+        // If not, mic_device = host_ref.default_input_device()....?.clone(); may be needed if mic_device must own.
+        // Assuming default_input_device() gives ownership or a clone, or a 'static ref if that were possible (it's not for Device).
+        // For safety, let's assume it's cloned or owned. CPAL Device struct is usually cloneable.
+    } // GLOBAL_HOST lock is released here
 
-    let mic_device = host.default_input_device()
-        .ok_or_else(|| "No default microphone input device available".to_string())?;
+    // --- Post-Host-Lock Device Processing ---
     let mic_device_identifier = mic_device.name().map_err(|e| format!("Failed to get mic device name: {}", e))?;
     println!("Default microphone device selected: '{}'", mic_device_identifier);
-    if let Ok(config) = mic_device.default_input_config() {
+    if let Ok(config) = mic_device.default_input_config() { // This uses the now-owned mic_device
         println!("  Default mic config: {} channels, {} Hz, {:?}", config.channels(), config.sample_rate().0, config.sample_format());
     }
 
+    // Commented-out device change listener registration - this used to be here
+    /*
+    if cfg!(windows) && !DEVICE_CHANGE_LISTENER_REGISTERED.load(Ordering::Relaxed) {
+        // ...
+        // match host.devices_changed_event_stream() { ... } // host is no longer in scope
+        // ...
+    }
+    */
 
+    // Loopback device selection using the populated available_input_devices
     let mut loopback_device: Option<cpal::Device> = None;
     let mut loopback_device_identifier: Option<String> = None;
 
     if cfg!(windows) {
         println!("Attempting to find specific loopback device on Windows...");
-        // Iterate through the already fetched `available_input_devices` for Windows loopback
-        for device_candidate in available_input_devices.iter() {
+        for device_candidate in available_input_devices.iter() { // Iterate over the cloned devices
             if let Ok(name) = device_candidate.name() {
                 if name.contains("Stereo Mix") || name.contains("Wave Out Mix") || name.contains("What U Hear") || name.contains("Loopback") {
-                    loopback_device = Some(device_candidate.clone());
+                    loopback_device = Some(device_candidate.clone()); // Clone again for ownership by Option
                     loopback_device_identifier = Some(name);
                     break;
                 }
@@ -293,12 +236,12 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
         if let Some(ref id) = loopback_device_identifier {
             println!("Windows loopback device found and selected: '{}'", id);
         } else {
-            println!("WARN: No specific Windows loopback device (Stereo Mix, etc.) found. Will record microphone only unless a generic loopback was logged above.");
+            println!("WARN: No specific Windows loopback device (Stereo Mix, etc.) found. Will record microphone only.");
         }
     } else if cfg!(target_os = "macos") {
-        println!("INFO: Automatic loopback device selection is not implemented for macOS. Logged candidates above might be manually selectable in the future.");
+        println!("INFO: Automatic loopback device selection is not implemented for macOS. Logged candidates may be manually selectable in the future.");
     } else if cfg!(target_os = "linux") {
-        println!("INFO: Automatic loopback device selection is not implemented for Linux. Logged candidates above might be manually selectable in the future.");
+        println!("INFO: Automatic loopback device selection is not implemented for Linux. Logged candidates may be manually selectable in the future.");
     } else {
         println!("INFO: Loopback device detection is OS-specific. Microphone only for this platform unless a generic input device serves as loopback.");
     }
@@ -308,26 +251,54 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
     let target_sample_format = SampleFormat::F32; // Process as f32, convert to i16 for WAV
 
     // Configure Microphone
-    let mut mic_config = mic_device.default_input_config()
-        .map_err(|e| format!("Failed to get default mic config: {}", e))?
-        .with_sample_rate(cpal::SampleRate(TARGET_SAMPLE_RATE));
-    if !mic_device.supported_input_configs().map_err(|e| format!("Failed to get supported mic configs: {}", e))?.any(|c| c.sample_rate() == cpal::SampleRate(TARGET_SAMPLE_RATE) && c.channels() <= 2 && c.sample_format() == target_sample_format) {
+    let supported_mic_config = mic_device.default_input_config()
+        .map_err(|e| format!("Failed to get default mic config: {}", e))?;
+    let mut stream_mic_config: StreamConfig = supported_mic_config.into();
+    stream_mic_config.sample_rate = cpal::SampleRate(TARGET_SAMPLE_RATE);
+
+    let supports_target_rate_mic = mic_device.supported_input_configs()
+        .map_err(|e| format!("Failed to get supported mic configs: {}", e))?
+        .any(|range| {
+            let config_at_target_rate = range.with_sample_rate(cpal::SampleRate(TARGET_SAMPLE_RATE));
+            config_at_target_rate.channels() <= 2 && config_at_target_rate.sample_format() == target_sample_format
+        });
+
+    if !supports_target_rate_mic {
         println!("WARN: Microphone does not support {} Hz sample rate with f32 format. Using default.", TARGET_SAMPLE_RATE);
-        mic_config = mic_device.default_input_config().map_err(|e| format!("Failed to get default mic config: {}", e))?;
+        let fallback_supported_config = mic_device.default_input_config().map_err(|e| format!("Failed to get default mic config: {}", e))?;
+        stream_mic_config = fallback_supported_config.into(); // Re-assign, sample rate will be default
     }
+
     // Try to set to stereo, fall back to mono
-    let supported_mic_channels = mic_config.channels();
-    if mic_device.supported_input_configs().map_err(|e| format!("Failed to get supported mic configs: {}", e))?.any(|c| c.sample_rate() == mic_config.sample_rate() && c.channels() == 2 && c.sample_format() == target_sample_format) {
-        mic_config.config().channels = 2;
-        println!("Microphone configured for stereo input at {:?}.", mic_config.sample_rate());
-    } else if mic_device.supported_input_configs().map_err(|e| format!("Failed to get supported mic configs: {}", e))?.any(|c| c.sample_rate() == mic_config.sample_rate() && c.channels() == 1 && c.sample_format() == target_sample_format) {
-        mic_config.config().channels = 1;
-        println!("Microphone configured for mono input at {:?}. Will be upmixed to stereo.", mic_config.sample_rate());
+    let original_mic_channels = stream_mic_config.channels; // Channels from current config (either target rate or default)
+
+    let supports_stereo_mic = mic_device.supported_input_configs()
+        .map_err(|e| format!("Failed to get supported mic configs: {}", e))?
+        .any(|range| {
+            let config_at_current_rate = range.with_sample_rate(stream_mic_config.sample_rate);
+            config_at_current_rate.channels() == 2 && config_at_current_rate.sample_format() == target_sample_format
+        });
+
+    if supports_stereo_mic {
+        stream_mic_config.channels = 2;
+        println!("Microphone configured for stereo input at {:?}.", stream_mic_config.sample_rate);
     } else {
-        println!("WARN: Microphone does not support stereo or mono at {:?}. Using default channels: {}.", mic_config.sample_rate(), supported_mic_channels);
-        mic_config.config().channels = supported_mic_channels; // Keep original channels if specific fallbacks fail
+        let supports_mono_mic = mic_device.supported_input_configs()
+            .map_err(|e| format!("Failed to get supported mic configs: {}", e))?
+            .any(|range| {
+                let config_at_current_rate = range.with_sample_rate(stream_mic_config.sample_rate);
+                config_at_current_rate.channels() == 1 && config_at_current_rate.sample_format() == target_sample_format
+            });
+        if supports_mono_mic {
+            stream_mic_config.channels = 1;
+            println!("Microphone configured for mono input at {:?}. Will be upmixed to stereo.", stream_mic_config.sample_rate);
+        } else {
+            println!("WARN: Microphone does not support stereo or mono at {:?}. Using original channels: {}.", stream_mic_config.sample_rate, original_mic_channels);
+            stream_mic_config.channels = original_mic_channels; // Keep original channels if specific fallbacks fail
+        }
     }
-    let final_mic_config: StreamConfig = mic_config.into();
+
+    let final_mic_config: StreamConfig = stream_mic_config; // Already a StreamConfig
     let mic_actual_channels = final_mic_config.channels;
     println!("[AudioProcessing] Final Microphone config: Channels: {}, Rate: {}Hz, Format: {:?}", final_mic_config.channels, final_mic_config.sample_rate.0, final_mic_config.sample_format);
     if final_mic_config.sample_rate.0 != TARGET_SAMPLE_RATE {
@@ -340,27 +311,52 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
     let final_loopback_device_identifier = loopback_device_identifier.clone();
 
     if let Some(ref dev) = loopback_device {
-        let mut loop_conf_supported = dev.default_input_config()
-            .map_err(|e| format!("Failed to get default loopback config: {}", e))?
-            .with_sample_rate(cpal::SampleRate(TARGET_SAMPLE_RATE));
+        let supported_loop_config = dev.default_input_config()
+            .map_err(|e| format!("Failed to get default loopback config: {}", e))?;
+        let mut stream_loop_config: StreamConfig = supported_loop_config.into();
+        stream_loop_config.sample_rate = cpal::SampleRate(TARGET_SAMPLE_RATE);
 
-        if !dev.supported_input_configs().map_err(|e| format!("Failed to get supported loopback configs: {}", e))?.any(|c| c.sample_rate() == cpal::SampleRate(TARGET_SAMPLE_RATE) && c.channels() <= 2 && c.sample_format() == target_sample_format) {
+        let supports_target_rate_loop = dev.supported_input_configs()
+            .map_err(|e| format!("Failed to get supported loopback configs: {}", e))?
+            .any(|range| {
+                let config_at_target_rate = range.with_sample_rate(cpal::SampleRate(TARGET_SAMPLE_RATE));
+                config_at_target_rate.channels() <= 2 && config_at_target_rate.sample_format() == target_sample_format
+            });
+
+        if !supports_target_rate_loop {
             println!("[AudioProcessing] WARN: Loopback device does not support {} Hz sample rate with f32 format. Using default.", TARGET_SAMPLE_RATE);
-            loop_conf_supported = dev.default_input_config().map_err(|e| format!("Failed to get default loopback config: {}", e))?;
+            let fallback_supported_config = dev.default_input_config().map_err(|e| format!("Failed to get default loopback config: {}", e))?;
+            stream_loop_config = fallback_supported_config.into(); // Re-assign, sample rate will be default
         }
 
-        let supported_loop_channels = loop_conf_supported.channels();
-        if dev.supported_input_configs().map_err(|e| format!("Failed to get supported loopback configs: {}", e))?.any(|c| c.sample_rate() == loop_conf_supported.sample_rate() && c.channels() == 2 && c.sample_format() == target_sample_format) {
-            loop_conf_supported.config().channels = 2;
-            println!("[AudioProcessing] Loopback device configured for stereo input at {:?}.", loop_conf_supported.sample_rate());
-        } else if dev.supported_input_configs().map_err(|e| format!("Failed to get supported loopback configs: {}", e))?.any(|c| c.sample_rate() == loop_conf_supported.sample_rate() && c.channels() == 1 && c.sample_format() == target_sample_format) {
-            loop_conf_supported.config().channels = 1;
-            println!("[AudioProcessing] Loopback device configured for mono input at {:?}. Will be upmixed to stereo.", loop_conf_supported.sample_rate());
+        let original_loop_channels = stream_loop_config.channels;
+
+        let supports_stereo_loop = dev.supported_input_configs()
+            .map_err(|e| format!("Failed to get supported loopback configs: {}", e))?
+            .any(|range| {
+                let config_at_current_rate = range.with_sample_rate(stream_loop_config.sample_rate);
+                config_at_current_rate.channels() == 2 && config_at_current_rate.sample_format() == target_sample_format
+            });
+
+        if supports_stereo_loop {
+            stream_loop_config.channels = 2;
+            println!("[AudioProcessing] Loopback device configured for stereo input at {:?}.", stream_loop_config.sample_rate);
         } else {
-             println!("[AudioProcessing] WARN: Loopback device does not support stereo or mono at {:?}. Using default channels: {}.", loop_conf_supported.sample_rate(), supported_loop_channels);
-            loop_conf_supported.config().channels = supported_loop_channels;
+            let supports_mono_loop = dev.supported_input_configs()
+                .map_err(|e| format!("Failed to get supported loopback configs: {}", e))?
+                .any(|range| {
+                    let config_at_current_rate = range.with_sample_rate(stream_loop_config.sample_rate);
+                    config_at_current_rate.channels() == 1 && config_at_current_rate.sample_format() == target_sample_format
+                });
+            if supports_mono_loop {
+                stream_loop_config.channels = 1;
+                println!("[AudioProcessing] Loopback device configured for mono input at {:?}. Will be upmixed to stereo.", stream_loop_config.sample_rate);
+            } else {
+                println!("[AudioProcessing] WARN: Loopback device does not support stereo or mono at {:?}. Using default channels: {}.", stream_loop_config.sample_rate, original_loop_channels);
+                stream_loop_config.channels = original_loop_channels;
+            }
         }
-        let final_loop_conf: StreamConfig = loop_conf_supported.into();
+        let final_loop_conf: StreamConfig = stream_loop_config; // Already a StreamConfig
         loopback_actual_channels = Some(final_loop_conf.channels);
         loopback_config_final = Some(final_loop_conf);
         println!("[AudioProcessing] Final Loopback config: Channels: {}, Rate: {}Hz, Format: {:?}", final_loop_conf.channels, final_loop_conf.sample_rate.0, final_loop_conf.sample_format);
@@ -470,22 +466,26 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
             loopback_samples_f32.clear();
             mixed_samples_i16.clear();
 
-            let mic_chunk = mic_consumer.pop_slice(mic_samples_f32.capacity());
-            if mic_chunk.len() > 0 {
-                mic_samples_f32.extend_from_slice(mic_chunk);
-                if iteration_count < LOG_INITIAL_SAMPLES_COUNT || (iteration_count % PERIODIC_LOG_INTERVAL == 0 && !mic_chunk.is_empty()) {
-                     println!("[AudioProcessing] Writer (Iter {}): Popped {} raw f32 samples from mic_consumer.", iteration_count, mic_chunk.len());
+            // Temporary buffers for pop_slice
+            let mut temp_mic_buffer = vec![0.0f32; RING_BUFFER_CAPACITY];
+            let mut temp_loopback_buffer = vec![0.0f32; RING_BUFFER_CAPACITY];
+
+            let num_popped_mic = mic_consumer.pop_slice(&mut temp_mic_buffer);
+            if num_popped_mic > 0 {
+                mic_samples_f32.extend_from_slice(&temp_mic_buffer[..num_popped_mic]);
+                if iteration_count < LOG_INITIAL_SAMPLES_COUNT || (iteration_count % PERIODIC_LOG_INTERVAL == 0 && num_popped_mic > 0) {
+                     println!("[AudioProcessing] Writer (Iter {}): Popped {} raw f32 samples from mic_consumer.", iteration_count, num_popped_mic);
                 }
             }
 
             let has_active_loopback = actual_loopback_stream.is_some() && loopback_actual_channels.is_some();
 
             if has_active_loopback {
-                let loopback_chunk = loopback_consumer.pop_slice(loopback_samples_f32.capacity());
-                if loopback_chunk.len() > 0 {
-                    loopback_samples_f32.extend_from_slice(loopback_chunk);
-                     if iteration_count < LOG_INITIAL_SAMPLES_COUNT || (iteration_count % PERIODIC_LOG_INTERVAL == 0 && !loopback_chunk.is_empty()) {
-                        println!("[AudioProcessing] Writer (Iter {}): Popped {} raw f32 samples from loopback_consumer.", iteration_count, loopback_chunk.len());
+                let num_popped_loopback = loopback_consumer.pop_slice(&mut temp_loopback_buffer);
+                if num_popped_loopback > 0 {
+                    loopback_samples_f32.extend_from_slice(&temp_loopback_buffer[..num_popped_loopback]);
+                     if iteration_count < LOG_INITIAL_SAMPLES_COUNT || (iteration_count % PERIODIC_LOG_INTERVAL == 0 && num_popped_loopback > 0) {
+                        println!("[AudioProcessing] Writer (Iter {}): Popped {} raw f32 samples from loopback_consumer.", iteration_count, num_popped_loopback);
                     }
                 }
             }
@@ -590,9 +590,35 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
 
     // --- Play Streams and Store State ---
     mic_stream.play().map_err(|e| format!("Failed to play mic stream: {}", e))?;
-    if let Some(ref stream) = actual_loopback_stream {
+    let mic_thread_stop_signal = stop_signal.clone();
+    let mic_stream_thread = std::thread::spawn(move || {
+        let _mic_stream = mic_stream; // Keep stream alive in this thread
+        loop {
+            if mic_thread_stop_signal.load(Ordering::Relaxed) {
+                println!("[AudioProcessing] Mic stream thread: Stop signal received. Exiting.");
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        println!("[AudioProcessing] Mic stream thread: Finished.");
+    });
+
+    let mut loopback_stream_thread: Option<JoinHandle<()>> = None;
+    if let Some(stream) = actual_loopback_stream {
         stream.play().map_err(|e| format!("Failed to play loopback stream: {}", e))?;
         println!("Both microphone and loopback streams are playing.");
+        let loop_thread_stop_signal = stop_signal.clone();
+        loopback_stream_thread = Some(std::thread::spawn(move || {
+            let _loop_stream = stream; // Keep stream alive in this thread
+            loop {
+                if loop_thread_stop_signal.load(Ordering::Relaxed) {
+                    println!("[AudioProcessing] Loopback stream thread: Stop signal received. Exiting.");
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            println!("[AudioProcessing] Loopback stream thread: Finished.");
+        }));
     } else {
         println!("Only microphone stream is playing.");
     }
@@ -602,8 +628,8 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
         note_id: note_id.to_string(),
         file_path: file_path.clone(),
         writer: wav_writer.clone(),
-        mic_stream: Some(mic_stream),
-        loopback_stream: actual_loopback_stream,
+        mic_stream_thread: Some(mic_stream_thread),
+        loopback_stream_thread,
         writer_thread: Some(writer_thread),
         stop_signal,
         mic_device_identifier, // Store the identifier
@@ -618,10 +644,10 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
 }
 
 // Helper function to build input stream and push to a producer
-fn build_input_stream_generic<T: Sample + Send + 'static>(
+fn build_input_stream_generic<T: Sample + Send + cpal::SizedSample + 'static>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    mut producer: Producer<f32>,
+    mut producer: Producer<f32, Arc<HeapRb<f32>>>,
     stop_signal: Arc<AtomicBool>,
     stream_name: String, // For logging
 ) -> Result<cpal::Stream, BuildStreamError> {
@@ -659,7 +685,7 @@ fn build_input_stream_generic<T: Sample + Send + 'static>(
                      }
                     break;
                 }
-                producer.push(sample.to_f32()).unwrap_or_else(|_| {
+                producer.push(Sample::to_f32(*sample)).unwrap_or_else(|_| {
                     // This is expected if writer thread stops first or during shutdown.
                 });
             }
@@ -671,7 +697,6 @@ fn build_input_stream_generic<T: Sample + Send + 'static>(
 
 
 // Stop recording audio
-#[command]
 pub fn stop_recording(recording_id: &str, db_conn: &Connection) -> Result<AudioRecording, String> {
     println!("[AudioProcessing] Command received to stop recording: {}", recording_id);
     let recording_arc = {
@@ -680,46 +705,54 @@ pub fn stop_recording(recording_id: &str, db_conn: &Connection) -> Result<AudioR
             .ok_or_else(|| format!("No active recording with ID {}", recording_id))?
     };
 
-    let (start_time, note_id_str, file_path_buf, final_writer_arc, writer_thread_handle, stop_sig, mic_s, loop_s) = {
+    let (start_time, note_id_str, file_path_buf, final_writer_arc, writer_thread_handle, _unused_stop_sig_clone, mic_stream_thread_handle, loop_stream_thread_handle) = {
         let mut recording_state_guard = recording_arc.lock().unwrap();
 
-        println!("Stopping streams for recording id: {}", recording_id);
-        recording_state_guard.stop_signal.store(true, Ordering::Relaxed);
+        println!("[AudioProcessing] Stop recording {}: Setting stop signal.", recording_id);
+        recording_state_guard.stop_signal.store(true, Ordering::Relaxed); // Signal all threads
 
-        if let Some(stream) = recording_state_guard.mic_stream.take() {
-            drop(stream);
-            println!("Mic stream for {} taken and will be dropped.", recording_id);
-        }
-        if let Some(stream) = recording_state_guard.loopback_stream.take() {
-            drop(stream);
-            println!("Loopback stream for {} taken and will be dropped.", recording_id);
-        }
-
-        let thread_handle = recording_state_guard.writer_thread.take();
-
+        // Take out JoinHandles
         (
             recording_state_guard.start_time,
             recording_state_guard.note_id.clone(),
             recording_state_guard.file_path.clone(),
             recording_state_guard.writer.clone(),
-            thread_handle,
-            recording_state_guard.stop_signal.clone(),
-            recording_state_guard.mic_stream.take(),
-            recording_state_guard.loopback_stream.take()
+            recording_state_guard.writer_thread.take(),
+            recording_state_guard.stop_signal.clone(), // Keep for potential immediate use if needed, though threads use their own clones
+            recording_state_guard.mic_stream_thread.take(),
+            recording_state_guard.loopback_stream_thread.take()
         )
     };
 
-    drop(mic_s);
-    drop(loop_s);
+    // stop_sig is cloned into each thread, so its original instance here isn't critical after this point.
+    // The streams are managed by their respective threads now.
 
-    println!("Waiting for writer thread to finish for recording id: {}", recording_id);
+    println!("[AudioProcessing] Stop recording {}: Waiting for writer thread to finish.", recording_id);
     if let Some(handle) = writer_thread_handle {
         match handle.join() {
-            Ok(_) => println!("Writer thread for {} joined successfully.", recording_id),
-            Err(e) => eprintln!("Error joining writer thread for {}: {:?}", recording_id, e),
+            Ok(_) => println!("[AudioProcessing] Writer thread for {} joined successfully.", recording_id),
+            Err(e) => eprintln!("[AudioProcessing] Error joining writer thread for {}: {:?}", recording_id, e),
         }
     } else {
-        eprintln!("WARN: No writer thread handle found for recording id: {}. File might not be complete.", recording_id);
+        eprintln!("[AudioProcessing] WARN: No writer thread handle found for recording id: {}. File might not be complete.", recording_id);
+    }
+
+    println!("[AudioProcessing] Stop recording {}: Waiting for mic stream thread to finish.", recording_id);
+    if let Some(handle) = mic_stream_thread_handle {
+        if let Err(e) = handle.join() {
+            eprintln!("[AudioProcessing] Error joining mic stream thread for {}: {:?}", recording_id, e);
+        } else {
+            println!("[AudioProcessing] Mic stream thread for {} joined successfully.", recording_id);
+        }
+    }
+
+    println!("[AudioProcessing] Stop recording {}: Waiting for loopback stream thread to finish.", recording_id);
+    if let Some(handle) = loop_stream_thread_handle {
+        if let Err(e) = handle.join() {
+            eprintln!("[AudioProcessing] Error joining loopback stream thread for {}: {:?}", recording_id, e);
+        } else {
+            println!("[AudioProcessing] Loopback stream thread for {} joined successfully.", recording_id);
+        }
     }
 
     {
@@ -758,7 +791,6 @@ pub fn stop_recording(recording_id: &str, db_conn: &Connection) -> Result<AudioR
 }
 
 // Get all audio recordings for a note
-#[command]
 pub fn get_audio_recordings(note_id: &str, db_conn: &Connection) -> Result<Vec<AudioRecording>, String> {
     let mut stmt = db_conn.prepare(
         "SELECT id, note_id, file_path, duration_ms, recorded_at
@@ -786,7 +818,6 @@ pub fn get_audio_recordings(note_id: &str, db_conn: &Connection) -> Result<Vec<A
 }
 
 // Get all audio block references for a recording
-#[command]
 pub fn get_audio_block_references(recording_id: &str, db_conn: &Connection) -> Result<Vec<AudioBlockReference>, String> {
     let mut stmt = db_conn.prepare(
         "SELECT id, recording_id, block_id, audio_offset_ms
@@ -813,7 +844,6 @@ pub fn get_audio_block_references(recording_id: &str, db_conn: &Connection) -> R
 }
 
 // Create an audio block reference
-#[command]
 pub fn create_audio_block_reference(
     recording_id: &str,
     block_id: &str,

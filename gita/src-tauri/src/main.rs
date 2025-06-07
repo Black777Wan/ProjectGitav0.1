@@ -22,7 +22,7 @@ struct AppState {
 fn init_app_state(app_handle: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
     // Get the app data directory
     let app_data_dir = app_handle
-        .path_resolver()
+        .path()
         .app_data_dir()
         .ok_or("Failed to get app data directory")?;
     
