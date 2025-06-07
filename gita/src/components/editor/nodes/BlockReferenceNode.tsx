@@ -1,4 +1,6 @@
+
 import { LexicalNode, NodeKey, SerializedLexicalNode, Spread, DecoratorNode } from 'lexical';
+
 import React from 'react';
 
 export interface BlockReferencePayload {
