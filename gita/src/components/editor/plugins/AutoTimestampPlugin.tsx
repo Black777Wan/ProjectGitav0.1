@@ -13,7 +13,7 @@ import {
   // ElementNode,       // ElementNode from jules_wip not strictly needed if using specific types
 } from 'lexical';
 import { useAudioRecordingStore } from '../../../stores/audioRecordingStore';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { $createAudioBlockNode } from '../nodes/AudioBlockNode'; // From jules_wip
 
 // Helper function to check if a node is a "taggable" block type that should be replaced by an AudioBlockNode

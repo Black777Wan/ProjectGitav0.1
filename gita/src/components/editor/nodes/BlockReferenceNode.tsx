@@ -1,5 +1,4 @@
-import { EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread } from 'lexical';
-import { DecoratorNode } from '@lexical/react/LexicalDecoratorNode';
+import { EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread, DecoratorNode } from 'lexical';
 import React from 'react';
 
 export interface BlockReferencePayload {

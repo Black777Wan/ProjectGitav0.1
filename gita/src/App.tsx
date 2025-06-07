@@ -14,7 +14,7 @@ import {
   createDailyNote, 
   getAudioDirectory // Keep from jules_wip
 } from "./api/fileSystem";
-import { invoke } from "@tauri-apps/api/tauri"; // Keep from jules_wip
+import { invoke } from "@tauri-apps/api/core"; // Keep from jules_wip
 import { v4 as uuidv4 } from 'uuid'; // Keep from jules_wip
 import { FiHelpCircle, FiSettings } from "react-icons/fi";
 import Tooltip from "./components/Tooltip";
