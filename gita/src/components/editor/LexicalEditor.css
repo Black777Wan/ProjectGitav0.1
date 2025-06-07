@@ -31,15 +31,17 @@
 }
 
 .editor-placeholder {
-  color: #999;
+  color: #666;
   overflow: hidden;
   position: absolute;
   text-overflow: ellipsis;
-  top: 15px;
-  left: 20px;
+  top: 23px; /* Adjusted for better alignment with bullet text */
+  left: 32px; /* Positioned after the bullet point */
   user-select: none;
   display: inline-block;
   pointer-events: none;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 .editor-paragraph {
@@ -116,27 +118,59 @@
 .editor-list-ul {
   padding: 0;
   margin: 0;
-  margin-left: 16px;
-}
-
-.editor-listitem {
-  margin: 8px 32px 8px 32px;
+  list-style: none;
   position: relative;
 }
 
-.editor-listitem::before {
-  content: '';
-  position: absolute;
-  left: -20px;
-  top: 8px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: #7F6DF2;
+.editor-listitem {
+  position: relative;
+  padding-left: 20px;
+  margin: 2px 0;
+  min-height: 24px;
+  line-height: 1.6;
 }
 
+.editor-listitem::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #7F6DF2;
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: bold;
+  width: 16px;
+  text-align: center;
+}
+
+/* Nested list styling with hierarchy lines */
 .editor-nested-listitem {
-  list-style-type: none;
+  position: relative;
+  margin-left: 20px;
+}
+
+.editor-nested-listitem::after {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #7F6DF2;
+  opacity: 0.3;
+}
+
+/* Different bullet styles for different nesting levels */
+.editor-listitem .editor-nested-listitem .editor-listitem::before {
+  content: '◦';
+  color: #7F6DF2;
+  opacity: 0.8;
+}
+
+.editor-listitem .editor-nested-listitem .editor-nested-listitem .editor-listitem::before {
+  content: '▪';
+  color: #7F6DF2;
+  opacity: 0.6;
 }
 
 .editor-text-bold {

@@ -9,6 +9,7 @@ import {
   FiHash,
   FiFileText,
   FiCheckSquare,
+  FiTrash2,
   // FiMic, // Not used directly, isRecordingActive triggers FiPlay/FiStop
   FiPlay, 
   FiSquare
@@ -37,9 +38,10 @@ import { INSERT_BLOCK_REFERENCE_COMMAND } from './plugins/BlockReferencePlugin';
 
 interface EditorToolbarProps {
   currentNoteId: string;
+  onDeleteNote?: () => void;
 }
 
-const EditorToolbar: React.FC<EditorToolbarProps> = ({ currentNoteId }) => {
+const EditorToolbar: React.FC<EditorToolbarProps> = ({ currentNoteId, onDeleteNote }) => {
   const [editor] = useLexicalComposerContext();
   const {
     isRecordingActive,
@@ -248,9 +250,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ currentNoteId }) => {
         >
           <FiCheckSquare />
         </button>
-      </div>
-
-      <div className="flex items-center space-x-2">
+      </div>      <div className="flex items-center space-x-2">
         {isRecordingActive && (
           <span className="text-sm text-light-muted dark:text-obsidian-muted font-mono tabular-nums">
             {formatRecordingTime(currentRecordingOffsetMs)}
@@ -267,6 +267,16 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ currentNoteId }) => {
           title={isRecordingActive ? "Stop Recording" : "Start Recording"}
         >
           {isRecordingActive ? <FiSquare /> : <FiPlay />}
+        </button>
+        
+        <div className="border-r border-light-border dark:border-obsidian-border mx-1 h-6"></div>
+        
+        <button 
+          onClick={onDeleteNote}
+          className="p-1.5 rounded hover:bg-red-500/10 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+          title="Delete Note"
+        >
+          <FiTrash2 />
         </button>
       </div>
     </div>

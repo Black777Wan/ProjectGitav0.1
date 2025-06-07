@@ -150,6 +150,14 @@ fn create_daily_note(state: State<AppState>) -> Result<file_system::Note, String
     file_system::create_daily_note(notes_dir_str)
 }
 
+// Command to delete a note
+#[tauri::command]
+fn delete_note(state: State<AppState>, note_id: &str) -> Result<(), String> {
+    let notes_dir_pathbuf = state.notes_dir.lock().map_err(|_| "Failed to acquire notes directory lock".to_string())?;
+    let notes_dir_str = notes_dir_pathbuf.to_str().ok_or_else(|| "Notes directory path is not valid UTF-8".to_string())?;
+    file_system::delete_note(notes_dir_str, note_id)
+}
+
 // Command to find backlinks for a note
 #[tauri::command]
 fn find_backlinks(state: State<AppState>, note_id: &str) -> Result<Vec<file_system::NoteMetadata>, String> {
@@ -206,8 +214,7 @@ fn main() {
             let app_state = init_app_state(&app.app_handle())?;
             app.manage(app_state);
             Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
+        })        .invoke_handler(tauri::generate_handler![
             get_notes_directory,
             set_notes_directory,
             get_audio_directory,
@@ -218,6 +225,7 @@ fn main() {
             write_markdown_file,
             create_note,
             create_daily_note,
+            delete_note,
             find_backlinks,
             start_recording,
             stop_recording,

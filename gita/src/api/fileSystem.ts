@@ -51,6 +51,11 @@ export async function createDailyNote(): Promise<Note> {
   return invoke('create_daily_note');
 }
 
+// Delete a note
+export async function deleteNote(noteId: string): Promise<void> {
+  return invoke('delete_note', { note_id: noteId });
+}
+
 // Find backlinks for a note
 export async function findBacklinks(noteId: string): Promise<NoteMetadata[]> {
   return invoke('find_backlinks', { note_id: noteId });

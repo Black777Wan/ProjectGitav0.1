@@ -22,21 +22,26 @@ import { TRANSFORMERS } from '@lexical/markdown';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { EditorState } from 'lexical';
 
+
 import { markdownToLexical, lexicalToMarkdown } from '../../utils/markdownUtils';
 import EditorToolbar from './EditorToolbar';
 import AutoTimestampPlugin from './plugins/AutoTimestampPlugin';
+import EnforceBulletListPlugin from './plugins/EnforceBulletListPlugin';
+import TabIndentationPlugin from './plugins/TabIndentationPlugin';
 import './LexicalEditor.css';
 
 interface LexicalEditorProps {
   initialContent?: string;
   onChange?: (content: string) => void;
   currentNoteId: string; 
+  onDeleteNote?: () => void;
 }
 
 const LexicalEditor: React.FC<LexicalEditorProps> = ({
   initialContent = '',
   onChange,
-  currentNoteId
+  currentNoteId,
+  onDeleteNote
 }) => {
   const theme = {
     ltr: 'ltr',
@@ -140,16 +145,14 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
       onChange(markdown);
     }
   };
-
   return (
     <div className="lexical-editor-container bg-light-bg dark:bg-obsidian-bg text-light-text dark:text-obsidian-text">
-      <LexicalComposer initialConfig={editorConfig}>
-        <div className="editor-inner">
-          <EditorToolbar currentNoteId={currentNoteId} />
+      <LexicalComposer initialConfig={editorConfig}>        <div className="editor-inner">
+          <EditorToolbar currentNoteId={currentNoteId} onDeleteNote={onDeleteNote} />
           <div className="editor-content">
             <RichTextPlugin
               contentEditable={<ContentEditable className="editor-input" />}
-              placeholder={<div className="editor-placeholder">Start writing...</div>}
+              placeholder={<div className="editor-placeholder">Start typing...</div>}
               ErrorBoundary={LexicalErrorBoundary}
             />
             <HistoryPlugin />
@@ -158,7 +161,9 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
             <LinkPlugin />
             <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
             <OnChangePlugin onChange={handleEditorChange} />
-            <AutoTimestampPlugin /> 
+            <AutoTimestampPlugin />
+            <EnforceBulletListPlugin />
+            <TabIndentationPlugin />
           </div>
         </div>
       </LexicalComposer>

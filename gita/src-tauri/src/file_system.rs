@@ -451,6 +451,23 @@ pub fn create_daily_note(notes_dir: &str) -> Result<Note, String> {
     })
 }
 
+// Delete a note
+pub fn delete_note(notes_dir: &str, note_id: &str) -> Result<(), String> {
+    // First, find the note to get its file path
+    let all_notes = get_all_notes(notes_dir)?;
+    let note_to_delete = all_notes.iter().find(|note| note.id == note_id);
+    
+    match note_to_delete {
+        Some(note) => {
+            // Delete the file
+            fs::remove_file(&note.path)
+                .map_err(|e| format!("Failed to delete note file: {}", e))?;
+            Ok(())
+        }
+        None => Err(format!("Note with ID {} not found", note_id))
+    }
+}
+
 // Find backlinks for a note
 pub fn find_backlinks(notes_dir: &str, note_id: &str) -> Result<Vec<NoteMetadata>, String> {
     let all_notes = get_all_notes(notes_dir)?;

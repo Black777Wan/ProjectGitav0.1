@@ -4,6 +4,7 @@ import EditorContainer from "./components/EditorContainer";
 import LexicalEditor from "./components/editor/LexicalEditor";
 import AudioRecordingsList from "./components/AudioRecordingsList";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
+import DeleteConfirmationModal from "./components/DeleteConfirmationModal";
 import ThemeToggle from "./components/ThemeToggle";
 import { Note } from "./types"; // ErrorMessage removed
 import { useErrorMessages } from './hooks/useErrorMessages'; // Import the new hook
@@ -13,13 +14,10 @@ import {
   writeMarkdownFile, 
   createNote, 
   createDailyNote, 
-  getAudioDirectory // Keep from jules_wip
+  deleteNote
 } from "./api/fileSystem";
-import { invoke } from "@tauri-apps/api/core"; // Keep from jules_wip
-import { v4 as uuidv4 } from 'uuid'; // Keep from jules_wip
 import { FiHelpCircle, FiSettings } from "react-icons/fi";
 import Tooltip from "./components/Tooltip";
-import { useAudioRecordingStore } from "./stores/audioRecordingStore"; // Keep from jules_wip
 import ErrorDisplay from './components/ErrorDisplay'; // Import ErrorDisplay
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'; // Import the new hook
 
@@ -29,8 +27,8 @@ function App() {
   const { errorMessages, addErrorMessage, removeErrorMessage } = useErrorMessages(); // Call the hook
   const [isLoading, setIsLoading] = useState(true);
   const [showAudioRecordings, setShowAudioRecordings] = useState(false);
-  const [audioRecordingsNoteId, setAudioRecordingsNoteId] = useState<string | null>(null);
-  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [audioRecordingsNoteId, setAudioRecordingsNoteId] = useState<string | null>(null);  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   // searchFocusRequested state from jules_wip/previous work for Ctrl+F
   const [searchFocusRequested, setSearchFocusRequested] = useState(false);
 
@@ -150,11 +148,42 @@ Start writing here...`;
       );
     }
   };
-
   const handleShowAudioRecordings = (noteId: string) => {
     setAudioRecordingsNoteId(noteId);
     setShowAudioRecordings(true);
   };
+
+  const handleDeleteNote = useCallback(() => {
+    setShowDeleteConfirmation(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!selectedNote) return;
+    
+    try {
+      await deleteNote(selectedNote.id);
+      
+      // Remove the note from the notes array
+      const updatedNotes = notes.filter(note => note.id !== selectedNote.id);
+      setNotes(updatedNotes);
+      
+      // Select the first available note or null
+      if (updatedNotes.length > 0) {
+        setSelectedNoteId(updatedNotes[0].id);
+      } else {
+        setSelectedNoteId(null);
+      }
+      
+      setShowDeleteConfirmation(false);
+    } catch (error) {
+      addErrorMessage(`Failed to delete note: ${(error as Error).message}`);
+      setShowDeleteConfirmation(false);
+    }
+  }, [selectedNote, notes, addErrorMessage]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirmation(false);
+  }, []);
 
   return (
     <div className="flex h-screen bg-light-bg dark:bg-obsidian-bg text-light-text dark:text-obsidian-text">
@@ -205,11 +234,11 @@ Start writing here...`;
               <EditorContainer
                 noteTitle={selectedNote.title}
               >
-                {/* Props for LexicalEditor are consistent */}
-                <LexicalEditor 
+                {/* Props for LexicalEditor are consistent */}                <LexicalEditor 
                   initialContent={selectedNote.content}
                   onChange={handleEditorChange}
                   currentNoteId={selectedNote.id}
+                  onDeleteNote={handleDeleteNote}
                 />
               </EditorContainer>
             </div>
@@ -221,10 +250,15 @@ Start writing here...`;
             </div>
           )}
         </div>
-      </div>
-      <KeyboardShortcutsModal 
+      </div>      <KeyboardShortcutsModal 
         isOpen={showKeyboardShortcuts} 
         onClose={() => setShowKeyboardShortcuts(false)} 
+      />
+      <DeleteConfirmationModal
+        isOpen={showDeleteConfirmation}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+        noteTitle={selectedNote?.title || ''}
       />
       <ErrorDisplay errorMessages={errorMessages} removeErrorMessage={removeErrorMessage} />
     </div>
