@@ -16,20 +16,32 @@ interface AudioBlockComponentProps {
   blockId: string;
   recordingId: string;
   audioFilePath: string;
-  startTime: number;
+  startTime: number; // Assuming this is in milliseconds
 }
 
 const AudioBlockComponent: React.FC<AudioBlockComponentProps> = ({
   blockId,
   recordingId,
   audioFilePath,
-  startTime
+  startTime,
 }) => {
   const [showPlayer, setShowPlayer] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [playableAudioSrc, setPlayableAudioSrc] = useState<string | null>(null);
+  const [endTimeMs, setEndTimeMs] = useState<number | null>(null); // Added state for endTime
   const playerPopupRef = useRef<HTMLDivElement>(null); // For click outside
+
+  // Simulate fetching timestamp data (including endTime)
+  useEffect(() => {
+    // In a real scenario, you would fetch this data based on blockId or recordingId
+    // For example: getAudioTimestampForBlock(blockId).then(data => setEndTimeMs(data.endTime));
+    console.log(`Simulating fetch for audio timestamp for block: ${blockId}, recording: ${recordingId}`);
+    // Simulate a 10-second segment if startTime is defined
+    if (typeof startTime === 'number') {
+      setEndTimeMs(startTime + 10000); // Simulate a 10-second segment
+    }
+  }, [blockId, recordingId, startTime]);
 
   useEffect(() => {
     if (audioFilePath) {
@@ -121,6 +133,7 @@ const AudioBlockComponent: React.FC<AudioBlockComponentProps> = ({
           <AudioPlayer
             audioSrc={playableAudioSrc}
             startTime={startTime} // AudioPlayer expects startTime in milliseconds
+            endTime={endTimeMs ?? undefined} // Pass endTime to AudioPlayer
           />
         </div>
       )}

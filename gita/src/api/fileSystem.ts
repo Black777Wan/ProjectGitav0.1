@@ -31,18 +31,18 @@ export async function searchNotes(query: string): Promise<NoteMetadata[]> {
   return invoke('search_notes', { query });
 }
 
-// Read a markdown file
-export async function readMarkdownFile(path: string): Promise<Note> {
-  return invoke('read_markdown_file', { path });
+// Read a note content
+export async function readNoteContent(path: string): Promise<Note> {
+  return invoke('read_note_content', { path });
 }
 
-// Write a markdown file
-export async function writeMarkdownFile(path: string, content: string): Promise<void> {
-  return invoke('write_markdown_file', { path, content });
+// Write a note content
+export async function writeNoteContent(path: string, content: Note): Promise<void> {
+  return invoke('write_note_content', { path, content });
 }
 
 // Create a new note
-export async function createNote(title: string, content: string): Promise<Note> {
+export async function createNote(title: string, content: Note): Promise<Note> {
   return invoke('create_note', { title, content });
 }
 

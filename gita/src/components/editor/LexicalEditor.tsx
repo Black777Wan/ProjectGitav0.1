@@ -20,10 +20,11 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
-import { EditorState } from 'lexical';
+import { EditorState, LexicalEditor as LexicalEditorType } from 'lexical';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { useEffect } from 'react';
 
-
-import { markdownToLexical, lexicalToMarkdown } from '../../utils/markdownUtils';
+// Removed markdownToLexical, lexicalToMarkdown
 import EditorToolbar from './EditorToolbar';
 import AutoTimestampPlugin from './plugins/AutoTimestampPlugin';
 import EnforceBulletListPlugin from './plugins/EnforceBulletListPlugin';
@@ -31,14 +32,31 @@ import TabIndentationPlugin from './plugins/TabIndentationPlugin';
 import './LexicalEditor.css';
 
 interface LexicalEditorProps {
-  initialContent?: string;
-  onChange?: (content: string) => void;
-  currentNoteId: string; 
+  initialContent?: string; // Should be JSON string
+  onChange?: (content: string) => void; // Should be JSON string
+  currentNoteId: string;
   onDeleteNote?: () => void;
 }
 
+// Helper component to initialize editor state from JSON
+const InitializeStatePlugin: React.FC<{ initialContent?: string }> = ({ initialContent }) => {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    if (initialContent) {
+      try {
+        const parsedState = editor.parseEditorState(initialContent);
+        editor.setEditorState(parsedState);
+      } catch (e) {
+        console.error("Error parsing initialContent JSON:", e);
+        // Optionally, set to a default empty state or handle error
+      }
+    }
+  }, [editor, initialContent]);
+  return null;
+};
+
 const LexicalEditor: React.FC<LexicalEditorProps> = ({
-  initialContent = '',
+  initialContent, // Keep as potentially undefined
   onChange,
   currentNoteId,
   onDeleteNote
@@ -114,7 +132,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
   };
 
   const editorConfig = {
-    editorState: initialContent ? markdownToLexical(initialContent) : undefined,
+    // editorState will be set by InitializeStatePlugin or default to empty
     namespace: 'obsidian-replica-editor',
     theme,
     onError: (error: Error) => {
@@ -139,10 +157,10 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
     ],
   };
 
-  const handleEditorChange = (editorState: EditorState) => {
+  const handleEditorChange = (editorState: EditorState, editor: LexicalEditorType) => {
     if (onChange) {
-      const markdown = lexicalToMarkdown(editorState);
-      onChange(markdown);
+      const jsonString = JSON.stringify(editorState.toJSON());
+      onChange(jsonString);
     }
   };
   return (
@@ -161,6 +179,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
             <LinkPlugin />
             <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
             <OnChangePlugin onChange={handleEditorChange} />
+            <InitializeStatePlugin initialContent={initialContent} />
             <AutoTimestampPlugin />
             <EnforceBulletListPlugin />
             <TabIndentationPlugin />
