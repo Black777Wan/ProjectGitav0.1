@@ -1,0 +1,67 @@
+.breadcrumbs {
+    margin-bottom: 20px;
+}
+
+.breadcrumbs > * {
+    &::after {
+        content: "›";
+        margin: 0 10px;
+    }
+
+    &:last-child:after {
+        content: "";
+    }
+}
+
+.editor--child {
+    padding-left: 6px;
+}
+
+.editor__children {
+    margin-left: 20px;
+    display: flex;
+
+    .editor--page > & {
+        margin-left: -20px;
+    }
+}
+
+.editor__children__container {
+    width: 100%;
+}
+
+.editor__children__thread-line {
+    position: relative;
+    width: 7px;
+    left: -6px;
+    cursor: pointer;
+    border-right: 1px solid lightgray;
+
+    &:hover {
+        left: -5px;
+        border-right: 3px solid white;
+    }
+}
+
+.references {
+    margin-top: 25px;
+
+    .breadcrumbs {
+        font-size: 0.8em;
+        margin-bottom: 5px;
+
+        > .block-link:first-child {
+            display: none;
+        }
+    }
+}
+
+.reference-container {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    padding: 5px 0 12px;
+}
+
+.references__toggle {
+    cursor: pointer;
+}
