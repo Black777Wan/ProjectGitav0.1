@@ -3,8 +3,6 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import {
   $getNodeByKey,
   $isParagraphNode,
-  $isHeadingNode,
-  $isListItemNode,
   NodeKey,
   NodeMutation,
   LexicalEditor,
@@ -12,16 +10,19 @@ import {
   $isRootNode,          // From jules_wip
   // ElementNode,       // ElementNode from jules_wip not strictly needed if using specific types
 } from 'lexical';
+import { $isHeadingNode } from '@lexical/rich-text';
+import { $isListItemNode } from '@lexical/list';
 import { useAudioRecordingStore } from '../../../stores/audioRecordingStore';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { $createAudioBlockNode } from '../nodes/AudioBlockNode'; // From jules_wip
 
 // Helper function to check if a node is a "taggable" block type that should be replaced by an AudioBlockNode
 // (from jules_wip)
 const isReplaceableEmptyBlock = (node: any): boolean => {
   if (!node) return false;
+
   // Only target empty Paragraphs, Headings, or ListItems for replacement
-  if (($isParagraphNode(node) || $isHeadingNode(node) || $isListItemNode(node)) && node.getChildrenSize() === 0) {
+  if ((Boolean($isParagraphNode(node)) || Boolean($isHeadingNode(node)) || Boolean($isListItemNode(node))) && node.getChildrenSize() === 0) {
     // Further check: ensure it's a direct child of root or a list,
     // to avoid replacing nodes nested deeply in other structures unexpectedly.
     const parent = node.getParent();

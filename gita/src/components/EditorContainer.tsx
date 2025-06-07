@@ -4,7 +4,6 @@ import { FiSave, FiLink, FiClock } from 'react-icons/fi';
 
 interface EditorContainerProps {
   noteTitle: string;
-  currentNoteId: string; // Added for LexicalEditor
   // isRecording, onStartRecording, onStopRecording removed
   onSave: () => void;
   children: React.ReactNode; // This will be LexicalEditor
@@ -12,7 +11,6 @@ interface EditorContainerProps {
 
 const EditorContainer: React.FC<EditorContainerProps> = ({
   noteTitle,
-  currentNoteId, // Added
   // isRecording, // Removed
   // onStartRecording, // Removed
   // onStopRecording, // Removed

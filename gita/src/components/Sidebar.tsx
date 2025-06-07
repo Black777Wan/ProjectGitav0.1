@@ -4,7 +4,6 @@ import {
   FiCalendar, 
   FiSearch, 
   FiSettings, 
-  FiPlus,
   FiFolder,
   FiChevronDown,
   FiChevronRight,
