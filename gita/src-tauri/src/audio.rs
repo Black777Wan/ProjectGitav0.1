@@ -4,18 +4,21 @@ use ringbuf::{HeapRb, Producer}; // Removed Consumer
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use sqlx::PgPool;
+use uuid::Uuid;
+use crate::audio_handler::{self, AudioRecording as DalAudioRecording};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicUsize}};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use rusqlite::{params, Connection}; // Removed Result as SqliteResult if it was there, ensured params and Connection remain if used.
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+// Removed: use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize}; // Keep for any local structs if needed, though problem implies removing some.
+use std::collections::HashMap; // Keep for ACTIVE_RECORDINGS
 
 // Define a struct to hold the recording state
 struct RecordingState {
     // is_recording is implicit if the entry exists in ACTIVE_RECORDINGS
     start_time: Instant,
-    note_id: String,
+    page_id: Option<String>, // MODIFIED from note_id: String
     file_path: PathBuf,
     writer: Arc<Mutex<Option<hound::WavWriter<BufWriter<File>>>>>,
     // mic_stream: Option<cpal::Stream>, // These are !Send, managed by their thread.
@@ -133,25 +136,10 @@ fn devices_changed_callback(host_id: cpal::HostId) {
 }
 */
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AudioRecording {
-    id: String,
-    note_id: String,
-    file_path: String,
-    duration_ms: u64,
-    recorded_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AudioBlockReference {
-    id: String,
-    recording_id: String,
-    block_id: String,
-    audio_offset_ms: u64,
-}
+// Removed local AudioRecording and AudioBlockReference structs
 
 // Start recording audio
-pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Result<String, String> {
+pub fn start_recording(page_id_opt: Option<&str>, recording_id: &str, audio_dir: &str) -> Result<String, String> {
     // --- Device Variables ---
     let mic_device: cpal::Device;
     let mut available_input_devices: Vec<cpal::Device> = Vec::new();
@@ -625,7 +613,7 @@ pub fn start_recording(note_id: &str, recording_id: &str, audio_dir: &str) -> Re
 
     let recording_state_data = RecordingState {
         start_time: Instant::now(),
-        note_id: note_id.to_string(),
+        page_id: page_id_opt.map(|s| s.to_string()),
         file_path: file_path.clone(),
         writer: wav_writer.clone(),
         mic_stream_thread: Some(mic_stream_thread),
@@ -695,183 +683,130 @@ where
     )
 }
 
-// Stop recording audio
-pub fn stop_recording(recording_id: &str, db_conn: &Connection) -> Result<AudioRecording, String> {
-    println!("[AudioProcessing] Command received to stop recording: {}", recording_id);
+// New async stop_recording function
+pub async fn stop_recording(
+    recording_id_key: String, // This is the String version of UUID from ACTIVE_RECORDINGS key
+    db_pool: &PgPool,
+) -> Result<DalAudioRecording, String> {
+    println!("[AudioProcessing] Command received to stop recording: {}", recording_id_key);
+
     let recording_arc = {
         let mut recordings_map = ACTIVE_RECORDINGS.lock().unwrap();
-        recordings_map.remove(recording_id)
-            .ok_or_else(|| format!("No active recording with ID {}", recording_id))?
+        recordings_map.remove(&recording_id_key)
+            .ok_or_else(|| format!("No active recording with ID {}", recording_id_key))?
     };
 
-    let (start_time, note_id_str, file_path_buf, final_writer_arc, writer_thread_handle, _unused_stop_sig_clone, mic_stream_thread_handle, loop_stream_thread_handle) = {
+    let (
+        start_time,
+        page_id_str_opt,
+        file_path_buf,
+        final_writer_arc,
+        writer_thread_handle,
+        mic_stream_thread_handle,
+        loop_stream_thread_handle
+    ) = {
         let mut recording_state_guard = recording_arc.lock().unwrap();
-
-        println!("[AudioProcessing] Stop recording {}: Setting stop signal.", recording_id);
+        println!("[AudioProcessing] Stop recording {}: Setting stop signal.", recording_id_key);
         recording_state_guard.stop_signal.store(true, Ordering::Relaxed); // Signal all threads
-
-        // Take out JoinHandles
         (
             recording_state_guard.start_time,
-            recording_state_guard.note_id.clone(),
+            recording_state_guard.page_id.clone(),
             recording_state_guard.file_path.clone(),
             recording_state_guard.writer.clone(),
             recording_state_guard.writer_thread.take(),
-            recording_state_guard.stop_signal.clone(), // Keep for potential immediate use if needed, though threads use their own clones
             recording_state_guard.mic_stream_thread.take(),
             recording_state_guard.loopback_stream_thread.take()
         )
     };
 
-    // stop_sig is cloned into each thread, so its original instance here isn't critical after this point.
-    // The streams are managed by their respective threads now.
-
-    println!("[AudioProcessing] Stop recording {}: Waiting for writer thread to finish.", recording_id);
+    println!("[AudioProcessing] Stop recording {}: Waiting for writer thread to finish.", recording_id_key);
     if let Some(handle) = writer_thread_handle {
-        match handle.join() {
-            Ok(_) => println!("[AudioProcessing] Writer thread for {} joined successfully.", recording_id),
-            Err(e) => eprintln!("[AudioProcessing] Error joining writer thread for {}: {:?}", recording_id, e),
+        if let Err(e) = handle.join() {
+            eprintln!("[AudioProcessing] Error joining writer thread for {}: {:?}", recording_id_key, e);
+        } else {
+            println!("[AudioProcessing] Writer thread for {} joined successfully.", recording_id_key);
         }
     } else {
-        eprintln!("[AudioProcessing] WARN: No writer thread handle found for recording id: {}. File might not be complete.", recording_id);
+         eprintln!("[AudioProcessing] WARN: No writer thread handle found for recording id: {}. File might not be complete.", recording_id_key);
     }
 
-    println!("[AudioProcessing] Stop recording {}: Waiting for mic stream thread to finish.", recording_id);
     if let Some(handle) = mic_stream_thread_handle {
         if let Err(e) = handle.join() {
-            eprintln!("[AudioProcessing] Error joining mic stream thread for {}: {:?}", recording_id, e);
+            eprintln!("[AudioProcessing] Error joining mic stream thread for {}: {:?}", recording_id_key, e);
         } else {
-            println!("[AudioProcessing] Mic stream thread for {} joined successfully.", recording_id);
+            println!("[AudioProcessing] Mic stream thread for {} joined successfully.", recording_id_key);
         }
     }
 
-    println!("[AudioProcessing] Stop recording {}: Waiting for loopback stream thread to finish.", recording_id);
     if let Some(handle) = loop_stream_thread_handle {
         if let Err(e) = handle.join() {
-            eprintln!("[AudioProcessing] Error joining loopback stream thread for {}: {:?}", recording_id, e);
+            eprintln!("[AudioProcessing] Error joining loopback stream thread for {}: {:?}", recording_id_key, e);
         } else {
-            println!("[AudioProcessing] Loopback stream thread for {} joined successfully.", recording_id);
+            println!("[AudioProcessing] Loopback stream thread for {} joined successfully.", recording_id_key);
         }
     }
 
     {
         let mut writer_guard = final_writer_arc.lock().unwrap();
         if let Some(writer) = writer_guard.take() {
-            println!("WARN: Writer was not finalized by thread for {}. Finalizing now.", recording_id);
-            writer.finalize().map_err(|e| format!("Failed to finalize WAV writer on stop: {}", e))?;
+             if let Err(e) = writer.finalize() {
+                eprintln!("WARN: Failed to finalize WAV writer for {}: {}. Continuing metadata saving.", recording_id_key, e);
+             } else {
+                println!("[AudioProcessing] WAV writer for {} finalized successfully by stop_recording.", recording_id_key);
+             }
         }
     }
 
-    let duration_ms = start_time.elapsed().as_millis() as u64;
-    println!("Recording {} stopped. Duration: {}ms. File: {:?}", recording_id, duration_ms, file_path_buf);
+    let duration_ms = start_time.elapsed().as_millis();
+    let file_path_string = file_path_buf.to_string_lossy().to_string();
+    println!("Recording {} stopped. Duration: {}ms. File: {}", recording_id_key, duration_ms, file_path_string);
 
-    let recorded_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let audio_recording = AudioRecording {
-        id: recording_id.to_string(),
-        note_id: note_id_str,
-        file_path: file_path_buf.to_string_lossy().to_string(),
-        duration_ms,
-        recorded_at,
+    let page_uuid: Option<Uuid> = match page_id_str_opt {
+        Some(id_str) => match Uuid::parse_str(&id_str) {
+            Ok(uuid) => Some(uuid),
+            Err(e) => {
+                eprintln!("Error parsing page_id '{}' for recording {}: {}. Recording will be saved without page association.", id_str, recording_id_key, e);
+                None
+            }
+        },
+        None => None,
     };
 
-    db_conn.execute(
-        "INSERT INTO audio_recordings (id, note_id, file_path, duration_ms, recorded_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![
-            audio_recording.id,
-            audio_recording.note_id,
-            audio_recording.file_path,
-            audio_recording.duration_ms,
-            audio_recording.recorded_at,
-        ],
-    ).map_err(|e| format!("Failed to insert recording into database: {}", e))?;
+    let recording_uuid = Uuid::parse_str(&recording_id_key)
+        .map_err(|e| format!("Failed to parse recording_id_key '{}' as UUID: {}", recording_id_key, e))?;
+    // Remove the _frontend_recording_uuid variable, just use recording_uuid
 
-    Ok(audio_recording)
-}
+    // Save metadata to PostgreSQL
+    let db_inserted_id = audio_handler::create_audio_recording( // Renamed new_db_id to db_inserted_id for clarity
+        db_pool,
+        recording_uuid, // <<<< PASS THE PARSED recording_uuid AS THE ID
+        page_uuid,
+        &file_path_string,
+        Some("audio/wav"),
+        Some(duration_ms as i32),
+    )
+    .await
+    .map_err(|e| format!("Failed to insert recording metadata into database: {}", e))?;
 
-// Get all audio recordings for a note
-pub fn get_audio_recordings(note_id: &str, db_conn: &Connection) -> Result<Vec<AudioRecording>, String> {
-    let mut stmt = db_conn.prepare(
-        "SELECT id, note_id, file_path, duration_ms, recorded_at
-         FROM audio_recordings
-         WHERE note_id = ?1
-         ORDER BY recorded_at DESC"
-    ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-    let recordings = stmt.query_map(params![note_id], |row| {
-        Ok(AudioRecording {
-            id: row.get(0)?,
-            note_id: row.get(1)?,
-            file_path: row.get(2)?,
-            duration_ms: row.get(3)?,
-            recorded_at: row.get(4)?,
-        })
-    }).map_err(|e| format!("Failed to query recordings: {}", e))?;
-
-    let mut result = Vec::new();
-    for recording in recordings {
-        result.push(recording.map_err(|e| format!("Failed to read recording: {}", e))?);
+    if db_inserted_id != recording_uuid {
+         // This warning is now more critical. It means the RETURNING id was different, which shouldn't happen
+         // if the INSERT uses the provided recording_uuid. This might indicate an issue with the query
+         // or table definition (e.g. if id still had DEFAULT on insert even when value provided).
+         // Given the query, this path should ideally not be hit.
+         eprintln!("CRITICAL WARN: ID returned from DB ({}) differs from frontend-provided recording UUID ({}). Check INSERT logic in audio_handler.", db_inserted_id, recording_uuid);
     }
 
-    Ok(result)
+    // Fetch the full DalAudioRecording to return, using the ID we intended to insert.
+    let dal_recording = audio_handler::get_audio_recording(db_pool, recording_uuid) // Use recording_uuid here
+        .await
+        .map_err(|e| format!("Failed to fetch audio recording with intended ID {}: {}", recording_uuid, e))?
+        .ok_or_else(|| format!("Audio recording with ID {} not found after attempting insert.", recording_uuid))?;
+
+    Ok(dal_recording)
 }
 
-// Get all audio block references for a recording
-pub fn get_audio_block_references(recording_id: &str, db_conn: &Connection) -> Result<Vec<AudioBlockReference>, String> {
-    let mut stmt = db_conn.prepare(
-        "SELECT id, recording_id, block_id, audio_offset_ms
-         FROM audio_block_references
-         WHERE recording_id = ?1
-         ORDER BY audio_offset_ms ASC"
-    ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-    let references = stmt.query_map(params![recording_id], |row| {
-        Ok(AudioBlockReference {
-            id: row.get(0)?,
-            recording_id: row.get(1)?,
-            block_id: row.get(2)?,
-            audio_offset_ms: row.get(3)?,
-        })
-    }).map_err(|e| format!("Failed to query block references: {}", e))?;
-
-    let mut result = Vec::new();
-    for reference in references {
-        result.push(reference.map_err(|e| format!("Failed to read block reference: {}", e))?);
-    }
-
-    Ok(result)
-}
-
-// Create an audio block reference
-pub fn create_audio_block_reference(
-    recording_id: &str,
-    block_id: &str,
-    audio_offset_ms: u64,
-    db_conn: &Connection
-) -> Result<AudioBlockReference, String> {
-    // Generate a unique ID for the reference
-    let id = format!("abr_{}", chrono::Utc::now().timestamp_millis());
-
-    // Create the reference object
-    let reference = AudioBlockReference {
-        id: id.clone(),
-        recording_id: recording_id.to_string(),
-        block_id: block_id.to_string(),
-        audio_offset_ms,
-    };
-
-    // Insert the reference into the database
-    db_conn.execute(
-        "INSERT INTO audio_block_references (id, recording_id, block_id, audio_offset_ms)
-         VALUES (?1, ?2, ?3, ?4)",
-        params![
-            reference.id,
-            reference.recording_id,
-            reference.block_id,
-            reference.audio_offset_ms,
-        ],
-    ).map_err(|e| format!("Failed to insert block reference into database: {}", e))?;
-
-    Ok(reference)
-}
+// Removed old SQLite-specific functions:
+// - get_audio_recordings
+// - get_audio_block_references
+// - create_audio_block_reference
 
