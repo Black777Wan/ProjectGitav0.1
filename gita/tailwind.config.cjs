@@ -5,13 +5,42 @@ module.exports = {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class', // Enable class-based dark mode
   theme: {
     extend: {
       colors: {
-        // Obsidian-like color palette
+        // Light theme
+        'light-bg': '#F5F5F5',
+        'light-sidebar': '#E0E0E0',
+        'light-accent': '#1976D2', // Example blue accent for light theme
+        'light-text': '#212121',
+        'light-muted': '#757575',
+        'light-border': '#BDBDBD',
+        'light-hover': '#EEEEEE',
+        'light-active': '#D6D6D6', // Slightly darker than hover
+
+        // Obsidian-like dark theme (prefixed for clarity, or use directly if not ambiguous)
+        // For Tailwind JIT to work with dark: prefix, we define base colors
+        // and then expect to use them like: bg-light-bg dark:bg-dark-bg
+        // So, we'll define a 'dark' object or ensure color names are distinct.
+        // Let's try to make current obsidian colors the "dark" variant by default.
+        // We will need to update components to use non-prefixed names,
+        // e.g. bg-bg instead of bg-obsidian-bg.
+        // And then index.css will apply dark:bg-obsidian-bg etc.
+        // This seems more complex than needed.
+
+        // Alternative: Define colors such that they are the *light* mode defaults,
+        // and dark mode overrides them.
+        // Example: 'bg': '#F5F5F5' (light-bg), and then dark variant is 'obsidian-bg'
+        // This requires components to use generic names like 'bg', 'text', 'accent'.
+
+        // Simplest for now: Keep obsidian as is, and use light- as prefix for light theme.
+        // Components will need to be updated to use e.g. `bg-light-bg dark:bg-obsidian-bg`.
+        // This is explicit and matches the request.
+
         'obsidian-bg': '#202020',
         'obsidian-sidebar': '#252525',
-        'obsidian-accent': '#7F6DF2',
+        'obsidian-accent': '#7F6DF2', // Purple accent for dark theme
         'obsidian-text': '#DCDDDE',
         'obsidian-muted': '#999999',
         'obsidian-border': '#333333',

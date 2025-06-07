@@ -21,21 +21,59 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   
   const audioRef = useRef<HTMLAudioElement>(null);
-  
+
+  /**
+   * Effect to handle changes to the `audioSrc` prop.
+   * When the source changes, it resets loading and playback states,
+   * pauses any current playback, and explicitly calls `load()` on the
+   * audio element to ensure the new source is fetched.
+   */
   useEffect(() => {
-    // Set the current time when the component mounts
-    if (audioRef.current && startTime > 0) {
-      audioRef.current.currentTime = startTime / 1000; // Convert ms to seconds
+    setIsLoading(true);
+    setIsPlaying(false);
+    // setCurrentTime is not reset here; it will be updated by `handleLoadedMetadata`
+    // or the `startTime` effect once the new audio is ready.
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.load();
     }
-  }, [startTime]);
+  }, [audioSrc]);
+  
+  /**
+   * Effect to handle setting the initial `currentTime` of the audio element.
+   * This is primarily for the `startTime` prop.
+   * It ensures that `currentTime` is set only when the audio element is ready
+   * (readyState > 0, meaning at least metadata is available) or when `isLoading` is false.
+   * The `handleLoadedMetadata` function also sets `currentTime` more definitively once duration is known.
+   */
+  useEffect(() => {
+    if (audioRef.current && (audioRef.current.readyState > 0 || !isLoading)) {
+      const newCurrentTimeInSeconds = startTime / 1000;
+      // Only set if duration is known and new time is within bounds, or if setting to 0
+      if (audioRef.current.duration && newCurrentTimeInSeconds < audioRef.current.duration) {
+        audioRef.current.currentTime = newCurrentTimeInSeconds;
+      } else if (newCurrentTimeInSeconds === 0) {
+        audioRef.current.currentTime = 0;
+      }
+      // The local `currentTime` state will be updated by the `timeupdate` event listener.
+    }
+  }, [startTime, isLoading]); // Re-run if startTime changes or after metadata has loaded.
   
   useEffect(() => {
-    // Update duration when audio metadata is loaded
+    const audioElement = audioRef.current;
+    if (!audioElement) return;
+
     const handleLoadedMetadata = () => {
-      if (audioRef.current) {
-        setDuration(audioRef.current.duration * 1000); // Convert seconds to ms
-        setIsLoading(false);
+      setDuration(audioElement.duration * 1000); // Convert seconds to ms
+      setIsLoading(false);
+      // Set initial time here as well, as this is when duration is known
+      const initialTimeSec = startTime / 1000;
+      if (initialTimeSec < audioElement.duration) {
+        audioElement.currentTime = initialTimeSec;
+      } else {
+        audioElement.currentTime = 0; // Default to 0 if startTime is invalid
       }
+      setCurrentTime(audioElement.currentTime * 1000); // Sync state
     };
     
     const handleTimeUpdate = () => {
@@ -52,19 +90,24 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       setIsPlaying(false);
     };
     
-    const audioElement = audioRef.current;
-    if (audioElement) {
-      audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
-      audioElement.addEventListener('timeupdate', handleTimeUpdate);
-      audioElement.addEventListener('ended', handleEnded);
+    audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audioElement.addEventListener('timeupdate', handleTimeUpdate);
+    audioElement.addEventListener('ended', handleEnded);
+    // Handle cases where audio might fail to load
+    const handleError = (e: Event) => {
+      console.error("Audio error:", e);
+      setIsLoading(false); // Stop loading indicator
+      // Optionally, display an error message to the user via a new state
+    };
+    audioElement.addEventListener('error', handleError);
       
-      return () => {
-        audioElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        audioElement.removeEventListener('timeupdate', handleTimeUpdate);
-        audioElement.removeEventListener('ended', handleEnded);
-      };
-    }
-  }, [onTimeUpdate]);
+    return () => {
+      audioElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audioElement.removeEventListener('timeupdate', handleTimeUpdate);
+      audioElement.removeEventListener('ended', handleEnded);
+      audioElement.removeEventListener('error', handleError);
+    };
+  }, [onTimeUpdate, startTime, audioSrc]); // Add audioSrc to re-attach if source changes fundamentally
   
   const togglePlay = () => {
     if (audioRef.current) {
@@ -102,6 +145,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   };
   
   const formatTime = (timeMs: number) => {
+    if (isNaN(timeMs) || timeMs === undefined) timeMs = 0;
     const totalSeconds = Math.floor(timeMs / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -125,7 +169,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         <input
           type="range"
           min="0"
-          max={audioRef.current?.duration || 0}
+          max={duration / 1000 || 0}
           step="0.01"
           value={currentTime / 1000}
           onChange={handleSeek}
@@ -165,11 +209,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           </button>
         </div>
         
-        <span className="text-obsidian-text mx-2">
+        <span className="text-obsidian-text mx-2 tabular-nums">
           {isLoading ? "Loading..." : `${formatTime(currentTime)} / ${formatTime(duration)}`}
         </span>
         
-        <button 
+        <button
           onClick={toggleMute}
           className="text-obsidian-muted hover:text-obsidian-text"
           title={isMuted ? "Unmute" : "Mute"}

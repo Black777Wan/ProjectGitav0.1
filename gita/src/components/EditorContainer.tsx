@@ -27,20 +27,20 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
   // This component, EditorContainer, is now simpler.
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen"> {/* Outer container itself doesn't need a bg if App.tsx provides one */}
       {/* Editor header */}
-      <div className="flex items-center justify-between p-2 border-b border-obsidian-border bg-obsidian-bg">
+      <div className="flex items-center justify-between p-2 border-b border-light-border dark:border-obsidian-border bg-light-bg dark:bg-obsidian-bg">
         <div className="flex items-center">
-          <h2 className="text-lg font-medium text-obsidian-text">{noteTitle}</h2>
+          <h2 className="text-lg font-medium text-light-text dark:text-obsidian-text">{noteTitle}</h2>
         </div>
         <div className="flex items-center space-x-2">
           {/* AudioRecorder component removed */}
           <button 
-            className="p-1.5 rounded hover:bg-obsidian-hover"
+            className="p-1.5 rounded hover:bg-light-hover dark:hover:bg-obsidian-hover text-light-text dark:text-obsidian-text"
             onClick={onSave}
             title="Save"
           >
-            <FiSave />
+            <FiSave /> {/* Icon inherits color */}
           </button>
         </div>
       </div>
@@ -62,7 +62,7 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
       </div>
 
       {/* Editor footer */}
-      <div className="flex items-center justify-between p-2 border-t border-obsidian-border bg-obsidian-bg text-xs text-obsidian-muted">
+      <div className="flex items-center justify-between p-2 border-t border-light-border dark:border-obsidian-border bg-light-bg dark:bg-obsidian-bg text-xs text-light-muted dark:text-obsidian-muted">
         <div className="flex items-center">
           <FiClock className="mr-1" /> Last modified: Today at 10:30 AM
         </div>

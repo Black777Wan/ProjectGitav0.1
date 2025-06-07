@@ -6,30 +6,36 @@ interface ThemeToggleProps {
 }
 
 const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true);
-
-  // Initialize theme from local storage or system preference
-  useEffect(() => {
+  /**
+   * Initializes the `isDarkMode` state.
+   * Priority:
+   * 1. Value from `localStorage` (if previously set by the user).
+   * 2. System preference (`prefers-color-scheme`).
+   */
+  const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) {
-      setIsDarkMode(savedTheme === 'dark');
-    } else {
-      // Check system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setIsDarkMode(prefersDark);
+      return savedTheme === 'dark';
     }
-  }, []);
+    // If no theme is saved in localStorage, use the system preference.
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
 
-  // Apply theme changes
+  /**
+   * Effect to apply theme changes to the application.
+   * When `isDarkMode` changes:
+   * 1. Adds or removes the 'dark' class from the `<html>` element (`document.documentElement`).
+   *    This class is used by Tailwind CSS for dark mode styling (`darkMode: 'class'`).
+   * 2. Saves the current theme preference to `localStorage`.
+   */
   useEffect(() => {
-    const root = window.document.documentElement;
+    // Use main's version for this block
     if (isDarkMode) {
-      root.classList.add('dark');
+      document.documentElement.classList.add('dark');
     } else {
-      root.classList.remove('dark');
+      document.documentElement.classList.remove('dark');
     }
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    // console.log(`Theme switched to ${isDarkMode ? 'dark' : 'light'} mode, class 'dark' ${isDarkMode ? 'added' : 'removed'}`);
   }, [isDarkMode]);
 
   const toggleTheme = () => {
@@ -39,13 +45,15 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
   return (
     <button
       onClick={toggleTheme}
-      className={`p-2 rounded-full hover:bg-obsidian-hover transition-colors duration-200 ${className}`}
+      // Update button styling to be theme-aware
+      className={`p-2 rounded-full hover:bg-light-hover dark:hover:bg-obsidian-hover text-light-text dark:text-obsidian-text transition-colors duration-200 ${className}`}
       title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
     >
+      {/* Use jules_wip version for icons to make them theme-aware, but simplify class if parent handles color */}
+      {/* The button itself now has text-light-text dark:text-obsidian-text, so icons should inherit */}
       {isDarkMode ? <FiSun size={18} /> : <FiMoon size={18} />}
     </button>
   );
 };
 
 export default ThemeToggle;
-

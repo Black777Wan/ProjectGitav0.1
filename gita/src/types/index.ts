@@ -9,6 +9,12 @@ export interface Note {
   tags: string[];
 }
 
+// Error Message type
+export interface ErrorMessage {
+  id: string;
+  message: string;
+}
+
 // Block types
 export interface Block {
   id: string;
