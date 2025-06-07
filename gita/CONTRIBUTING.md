@@ -1,6 +1,6 @@
-# Contributing to Obsidian Replica
+# Contributing to Gita
 
-Thank you for considering contributing to Obsidian Replica! This document provides guidelines and instructions for contributing to the project.
+Thank you for considering contributing to Gita! This document provides guidelines and instructions for contributing to the project.
 
 ## Code of Conduct
 

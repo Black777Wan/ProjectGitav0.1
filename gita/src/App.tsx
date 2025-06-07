@@ -204,7 +204,6 @@ Start writing here...`;
               {/* Props for EditorContainer from jules_wip */}
               <EditorContainer
                 noteTitle={selectedNote.title}
-                onSave={handleSaveNote}
               >
                 {/* Props for LexicalEditor are consistent */}
                 <LexicalEditor 

@@ -72,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar header */}
       <div className="p-2 border-b border-light-border dark:border-obsidian-border">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-lg font-semibold text-light-text dark:text-obsidian-text">Obsidian Replica</h1>
+          <h1 className="text-lg font-semibold text-light-text dark:text-obsidian-text">Gita</h1>
         </div>
         <div className="relative">
           <input
