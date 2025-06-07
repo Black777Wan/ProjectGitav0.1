@@ -78,13 +78,8 @@ Blocks (if blocks table is implemented):
 When saving a note, parse the Lexical JSON. For each relevant block (e.g., list items, custom nodes), extract its key, type, and parent relationship, then INSERT or UPDATE the blocks table. This is complex and requires careful handling of the Lexical structure.
 Alternatively, block references can be resolved by querying the JSONB content of notes directly if performance allows.
 Tags: Implement commands for adding/removing tags from notes and listing notes by tag.
-Data Migration (Critical):
 
-Develop a one-time migration script (Rust or other) to:
-Read all existing Markdown files.
-Convert Markdown content to Lexical JSON format (this might require a headless Lexical instance or a robust Markdown-to-Lexical JSON converter).
-Extract metadata from the old SQLite database.
-Insert the migrated data into the new PostgreSQL tables, ensuring IDs and relationships are correctly established.
+
 Phase 3: Backend - Audio and References Update
 
 Modify Audio-Related Tauri Commands:
