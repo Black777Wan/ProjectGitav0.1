@@ -332,16 +332,16 @@ fn extract_links_references_and_blocks(
     ) {
         if let Some(obj) = node.as_object() {
             let mut current_block_unique_id: Option<Uuid> = None;
-            let mut current_block_type: Option<String> = None;
+            let mut _current_block_type: Option<String> = None;
 
             if let Some(id_str) = obj.get("uniqueID").and_then(|v| v.as_str()) {
                 if let Ok(id) = Uuid::parse_str(id_str) {
                     current_block_unique_id = Some(id);
-                    current_block_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
+                    _current_block_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
 
                     extracted_blocks.insert(ExtractedBlockInfo {
                         id,
-                        block_type: current_block_type.clone(),
+                        block_type: _current_block_type.clone(),
                         parent_block_id: current_parent_block_id,
                     });
                 }

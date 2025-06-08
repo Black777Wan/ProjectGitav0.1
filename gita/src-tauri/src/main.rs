@@ -505,12 +505,10 @@ async fn get_references_for_block(state: State<'_, AppState>, block_id: String) 
 #[tokio::main]
 async fn main() {
     tauri::Builder::default()
-        .setup(|app| {
-            Box::pin(async move {
-                let app_state = init_app_state(&app.app_handle()).await?;
-                app.manage(app_state);
-                Ok(())
-            })
+    .setup(|app| async move {
+        let app_state = init_app_state(&app.app_handle()).await?;
+        app.manage(app_state);
+        Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_notes_directory,

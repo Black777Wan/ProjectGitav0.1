@@ -21,8 +21,9 @@ tokio = { version = "1", features = ["full"] }
 walkdir = "2.3.3"
 notify = "4.0.17"
 regex = "1.9.1"
-chrono = "0.4.26"
+chrono = { version = "0.4.26", features = ["serde"] }
 serde_yaml = "0.9.21"
+thiserror = "1.0"
 cpal = "0.15.2"
 hound = "3.5.0"
 lazy_static = "1.4.0"
