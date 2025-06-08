@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicUsize}};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 // Removed: use rusqlite::{params, Connection};
-use serde::{Deserialize, Serialize}; // Keep for any local structs if needed, though problem implies removing some.
 use std::collections::HashMap; // Keep for ACTIVE_RECORDINGS
 
 // Define a struct to hold the recording state
@@ -293,7 +292,7 @@ pub fn start_recording(page_id_opt: Option<&str>, recording_id: &str, audio_dir:
 
     // Configure Loopback
     let mut loopback_config_final: Option<StreamConfig> = None;
-    let mut _loopback_actual_channels: Option<u16> = None;
+    let mut loopback_actual_channels: Option<u16> = None;
     let final_loopback_device_identifier = loopback_device_identifier.clone();
 
     if let Some(ref dev) = loopback_device {

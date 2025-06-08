@@ -11,7 +11,6 @@ pub mod page_handler;
 pub mod block_handler;
 pub mod audio_handler;
 pub mod link_handler;
-use crate::link_handler; // Added this line
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -19,7 +18,6 @@ use tauri::{AppHandle, Manager, State};
 use serde_json::Value;
 use uuid::Uuid;
 use crate::page_handler::Page as DalPage;
-use chrono::{DateTime, Utc};
 use crate::audio_handler::AudioRecording as DalAudioRecording;
 use crate::audio_handler::AudioTimestamp as DalAudioTimestamp;
 use crate::link_handler::BlockReference as DalBlockReference; // For the new command
@@ -282,7 +280,7 @@ async fn update_page_content(
         page_uuid,
         title_ref,
         content_json, // Pass content_json directly
-        raw_markdown.map(Some), // If raw_markdown is Some(String), pass Some(Some(string_slice)). If None, pass None.
+        raw_markdown.as_deref().map(Some), // If raw_markdown is Some(String), pass Some(Some(string_slice)). If None, pass None.
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -422,7 +420,7 @@ async fn start_recording(
 async fn stop_recording(state: State<'_, AppState>, recording_id: String) -> Result<CommandAudioRecording, String> {
     let rec_uuid = Uuid::parse_str(&recording_id).map_err(|e| format!("Invalid recording ID: {}", e))?;
 
-    let dal_audio_recording = audio::stop_recording(rec_uuid, &state.pool)
+    let dal_audio_recording = audio::stop_recording(rec_uuid.to_string(), &state.pool)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -508,7 +506,7 @@ async fn main() {
     .setup(|app| async move {
         let app_state = init_app_state(&app.app_handle()).await?;
         app.manage(app_state);
-        Ok(())
+        Ok::<(), Box<dyn std::error::Error + Send + Sync + 'static>>(())
         })
         .invoke_handler(tauri::generate_handler![
             get_notes_directory,
