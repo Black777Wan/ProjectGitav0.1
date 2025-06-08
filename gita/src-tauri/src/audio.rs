@@ -200,11 +200,10 @@ pub fn start_recording(page_id_opt: Option<&str>, recording_id: &str, audio_dir:
         // match host.devices_changed_event_stream() { ... } // host is no longer in scope
         // ...
     }
-    */
-
-    // Loopback device selection using the populated available_input_devices
+    */    // Loopback device selection using the populated available_input_devices
     let mut loopback_device: Option<cpal::Device> = None;
     let mut loopback_device_identifier: Option<String> = None;
+    let mut loopback_actual_channels: Option<u16> = None;
 
     if cfg!(windows) {
         println!("Attempting to find specific loopback device on Windows...");

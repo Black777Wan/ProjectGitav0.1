@@ -6,7 +6,7 @@
 // Removed: use rusqlite::Connection;
 // Removed: use tauri::AppHandle; // Was not present in snippet, but good to confirm
 // Removed: use chrono::{DateTime, Utc};
-use regex::Regex;
+// Removed: use regex::Regex; // Removed unused import
 use serde::{Deserialize, Serialize};
 // Removed: use uuid::Uuid;
 // Removed: use walkdir::WalkDir;
