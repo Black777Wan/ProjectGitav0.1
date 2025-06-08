@@ -109,12 +109,10 @@ export default function AutoTimestampPlugin(): null {
                             `File: ${freshStoreState.currentRecordingFilePath}, ` +
                             `RecID: ${freshStoreState.currentRecordingId}, ` +
                             `Offset: ${freshStoreState.currentRecordingOffsetMs}`
-                        );
-
-                        invoke('create_audio_block_reference', {
-                          recordingId: freshStoreState.currentRecordingId!, // Non-null asserted due to checks
-                          blockId: audioBlockNode.getKey(), 
-                          audioOffsetMs: freshStoreState.currentRecordingOffsetMs,
+                        );                        invoke('add_audio_timestamp', {
+                          audio_recording_id: freshStoreState.currentRecordingId!, // Non-null asserted due to checks
+                          block_id: audioBlockNode.getKey(), 
+                          timestamp_ms: freshStoreState.currentRecordingOffsetMs,
                         })
                           .then(() => {
                             console.log(`AutoTimestamp: Successfully created DB reference for AudioBlock ${audioBlockNode.getKey()}`);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiLink, FiClock } from 'react-icons/fi'; // FiSave removed as not used
-import { findBacklinks, getReferencesForBlock } from '../../api/fileSystem'; // Adjust path as needed
-import { NoteMetadata, BlockReference } from '../../types'; // Adjust path as needed
+import { findBacklinks, getReferencesForBlock } from '../api/fileSystem'; // Fixed path
+import { NoteMetadata, BlockReference } from '../types'; // Fixed path
 
 interface EditorContainerProps {
   noteTitle: string;

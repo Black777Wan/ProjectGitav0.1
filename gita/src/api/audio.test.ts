@@ -73,7 +73,7 @@ describe('audio API', () => {
 
     const result = await getAudioBlockReferences(recordingId);
 
-    expect(invoke).toHaveBeenCalledWith('get_audio_block_references', { recording_id: recordingId });
+    expect(invoke).toHaveBeenCalledWith('get_audio_timestamps_for_recording', { recording_id: recordingId });
     expect(result).toEqual(mockReferences);
   });
 
@@ -89,16 +89,13 @@ describe('audio API', () => {
     };
     (invoke as jest.Mock).mockResolvedValueOnce(mockReference);
 
-    const result = await createAudioBlockReference(recordingId, blockId, audioOffsetMs);
-
-    expect(invoke).toHaveBeenCalledWith('create_audio_block_reference', {
-      recording_id: recordingId,
+    const result = await createAudioBlockReference(recordingId, blockId, audioOffsetMs);    expect(invoke).toHaveBeenCalledWith('add_audio_timestamp', {
+      audio_recording_id: recordingId,
       block_id: blockId,
-      audio_offset_ms: audioOffsetMs,
+      timestamp_ms: audioOffsetMs,
     });
-    expect(result).toEqual(mockReference);
-    // Ensure all IDs are passed as strings
-    expect(typeof (invoke as jest.Mock).mock.calls[0][1].recording_id).toBe('string');
+    expect(result).toEqual(mockReference);    // Ensure all IDs are passed as strings
+    expect(typeof (invoke as jest.Mock).mock.calls[0][1].audio_recording_id).toBe('string');
     expect(typeof (invoke as jest.Mock).mock.calls[0][1].block_id).toBe('string');
   });
 });

@@ -18,7 +18,7 @@ export async function getAudioRecordings(noteId: string): Promise<AudioRecording
 
 // Get audio block references for a recording
 export async function getAudioBlockReferences(recordingId: string): Promise<AudioBlockReference[]> {
-  return invoke('get_audio_block_references', { recording_id: recordingId });
+  return invoke('get_audio_timestamps_for_recording', { recording_id: recordingId });
 }
 
 // Create an audio block reference
@@ -27,10 +27,10 @@ export async function createAudioBlockReference(
   blockId: string,
   audioOffsetMs: number
 ): Promise<AudioBlockReference> {
-  return invoke('create_audio_block_reference', {
-    recording_id: recordingId,
+  return invoke('add_audio_timestamp', {
+    audio_recording_id: recordingId,
     block_id: blockId,
-    audio_offset_ms: audioOffsetMs
+    timestamp_ms: audioOffsetMs
   });
 }
 
