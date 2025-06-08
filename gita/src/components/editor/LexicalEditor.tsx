@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useEffect, useRef } from 'react'; // Added useMemo
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
@@ -20,11 +20,8 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
-import { EditorState, LexicalEditor as LexicalEditorType } from 'lexical';
+import { EditorState } from 'lexical'; // Removed LexicalEditorType
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { useEffect } from 'react';
-
-// Removed markdownToLexical, lexicalToMarkdown
 import EditorToolbar from './EditorToolbar';
 import AutoTimestampPlugin from './plugins/AutoTimestampPlugin';
 import EnforceBulletListPlugin from './plugins/EnforceBulletListPlugin';
@@ -39,29 +36,38 @@ interface LexicalEditorProps {
 }
 
 // Helper component to initialize editor state from JSON
-const InitializeStatePlugin: React.FC<{ initialContent?: string }> = ({ initialContent }) => {
+const InitializeStatePlugin: React.FC<{ initialContent?: string; noteId: string }> = ({ initialContent, noteId }) => {
   const [editor] = useLexicalComposerContext();
+  const hasInitializedThisInstance = useRef(false); // Flag for the current instance
+
   useEffect(() => {
-    if (initialContent) {
+    // If this instance hasn't initialized yet, and we have valid content and an editor
+    if (!hasInitializedThisInstance.current && editor && initialContent && initialContent.trim() !== '') {
       try {
+        // console.log(`InitializeStatePlugin: Setting state for noteId: ${noteId} (Instance first time)`);
         const parsedState = editor.parseEditorState(initialContent);
         editor.setEditorState(parsedState);
+        hasInitializedThisInstance.current = true; // Mark this instance as initialized
       } catch (e) {
-        console.error("Error parsing initialContent JSON:", e);
-        // Optionally, set to a default empty state or handle error
+        console.error(`InitializeStatePlugin: Error setting state for noteId ${noteId}:`, e);
+        // Optionally, set to a default empty state or handle error if parsing fails
+        // editor.setEditorState(editor.parseEditorState(JSON.stringify({root:{children:[{type:'paragraph',version:1}],direction:null,format:'',indent:0,version:1}})));
+        // hasInitializedThisInstance.current = true; // Still mark as initialized to prevent loops
       }
     }
-  }, [editor, initialContent]);
+  }, [editor, initialContent, noteId]); // noteId is stable for this instance due to parent keying
+
   return null;
 };
 
-const LexicalEditor: React.FC<LexicalEditorProps> = ({
-  initialContent, // Keep as potentially undefined
+const LexicalEditorComponent: React.FC<LexicalEditorProps> = ({ // Renamed to avoid conflict if not already
+  initialContent,
   onChange,
   currentNoteId,
   onDeleteNote
 }) => {
-  const theme = {
+  // Memoize theme as it's static
+  const theme = useMemo(() => ({
     ltr: 'ltr',
     rtl: 'rtl',
     paragraph: 'editor-paragraph',
@@ -81,8 +87,8 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
       ol: 'editor-list-ol',
       ul: 'editor-list-ul',
       listitem: 'editor-listitem',
-      listitemChecked: 'editor-listitem-checked', // Added for checklist
-      listitemUnchecked: 'editor-listitem-unchecked', // Added for checklist
+      listitemChecked: 'editor-listitem-checked',
+      listitemUnchecked: 'editor-listitem-unchecked',
     },
     image: 'editor-image',
     link: 'editor-link',
@@ -127,12 +133,11 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
       url: 'editor-tokenOperator',
       variable: 'editor-tokenVariable',
     },
-    // For AudioBlockNode custom styling if needed
-    audioBlock: 'editor-audio-block', 
-  };
+    audioBlock: 'editor-audio-block',
+  }), []);
 
-  const editorConfig = {
-    // editorState will be set by InitializeStatePlugin or default to empty
+  // Memoize editorConfig. It depends on `theme`.
+  const editorConfig = useMemo(() => ({
     namespace: 'obsidian-replica-editor',
     theme,
     onError: (error: Error) => {
@@ -151,13 +156,12 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
       TableRowNode,
       AutoLinkNode,
       LinkNode,
-      // CheckListNode, // Commented out due to TS2305
       BlockReferenceNode,
-      AudioBlockNode, // Keep this from jules_wip
+      AudioBlockNode,
     ],
-  };
+  }), [theme]);
 
-  const handleEditorChange = (editorState: EditorState, editor: LexicalEditorType) => {
+  const handleEditorChange = (editorState: EditorState) => {
     if (onChange) {
       const jsonString = JSON.stringify(editorState.toJSON());
       onChange(jsonString);
@@ -165,7 +169,8 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
   };
   return (
     <div className="lexical-editor-container bg-light-bg dark:bg-obsidian-bg text-light-text dark:text-obsidian-text">
-      <LexicalComposer initialConfig={editorConfig}>        <div className="editor-inner">
+      <LexicalComposer initialConfig={editorConfig}>
+        <div className="editor-inner">
           <EditorToolbar currentNoteId={currentNoteId} onDeleteNote={onDeleteNote} />
           <div className="editor-content">
             <RichTextPlugin
@@ -179,7 +184,7 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
             <LinkPlugin />
             <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
             <OnChangePlugin onChange={handleEditorChange} />
-            <InitializeStatePlugin initialContent={initialContent} />
+            <InitializeStatePlugin initialContent={initialContent} noteId={currentNoteId} />
             <AutoTimestampPlugin />
             <EnforceBulletListPlugin />
             <TabIndentationPlugin />
@@ -190,4 +195,4 @@ const LexicalEditor: React.FC<LexicalEditorProps> = ({
   );
 };
 
-export default LexicalEditor;
+export default LexicalEditorComponent; // Ensure this is the name exported if renamed

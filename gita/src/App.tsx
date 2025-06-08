@@ -24,6 +24,21 @@ import ErrorDisplay from './components/ErrorDisplay'; // Import ErrorDisplay
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'; // Import the new hook
 import { convertLexicalJSONToMarkdown } from "./utils/lexicalUtils"; // Added import
 
+// Simple debounce utility
+function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  const debounced = (...args: Parameters<F>) => {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+    timeout = setTimeout(() => func(...args), waitFor);
+  };
+
+  return debounced as (...args: Parameters<F>) => void;
+}
+
 function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
@@ -36,6 +51,45 @@ function App() {
   const [searchFocusRequested, setSearchFocusRequested] = useState(false);
 
   const selectedNote = notes.find(note => note.id === selectedNoteId) || null;
+
+  // Debounced version of the core logic that updates note content
+  const debouncedUpdateNoteContentInState = useCallback(
+    debounce((noteIdToUpdate: string, newContentJson: string, newRawMarkdown: string) => {
+      setNotes(prevNotes =>
+        prevNotes.map(note =>
+          note.id === noteIdToUpdate
+            ? {
+                ...note,
+                content_json: newContentJson,
+                raw_markdown: newRawMarkdown,
+                updated_at: new Date().toISOString(), // Keep client-side update for responsiveness
+              }
+            : note
+        )
+      );
+      // Future: Consider if auto-save should also be debounced or happen here
+    }, 500), // Debounce by 500ms, adjust as needed
+    [] // setNotes from useState is stable, so no dependencies needed for the debounce function itself.
+  );
+
+  const handleDailyNote = useCallback(async () => {
+    try {
+      const dailyNoteFull = await createDailyNote(); // Returns a full Note object
+      const existingNoteIndex = notes.findIndex(note => note.id === dailyNoteFull.id);
+      if (existingNoteIndex >= 0) {
+        // If it exists, update it in the list (it might have been a placeholder)
+        setNotes(prevNotes =>
+          prevNotes.map(n => n.id === dailyNoteFull.id ? dailyNoteFull : n)
+        );
+      } else {
+        setNotes(prevNotes => [...prevNotes, dailyNoteFull]);
+      }
+      setSelectedNoteId(dailyNoteFull.id);
+      setShowAudioRecordings(false);
+    } catch (error) {
+      addErrorMessage(`Error creating daily note: ${(error as Error).message}`);
+    }
+  }, [addErrorMessage, notes]); // notes dependency needed if checking existingNoteIndex
 
   useEffect(() => {
     const loadInitialNotesMetadata = async () => {
@@ -127,25 +181,6 @@ function App() {
     }
   }, [addErrorMessage]);
 
-  const handleDailyNote = useCallback(async () => {
-    try {
-      const dailyNoteFull = await createDailyNote(); // Returns a full Note object
-      const existingNoteIndex = notes.findIndex(note => note.id === dailyNoteFull.id);
-      if (existingNoteIndex >= 0) {
-        // If it exists, update it in the list (it might have been a placeholder)
-        setNotes(prevNotes =>
-          prevNotes.map(n => n.id === dailyNoteFull.id ? dailyNoteFull : n)
-        );
-      } else {
-        setNotes(prevNotes => [...prevNotes, dailyNoteFull]);
-      }
-      setSelectedNoteId(dailyNoteFull.id);
-      setShowAudioRecordings(false);
-    } catch (error) {
-      addErrorMessage(`Error creating daily note: ${(error as Error).message}`);
-    }
-  }, [addErrorMessage, notes]); // notes dependency needed if checking existingNoteIndex
-
   const handleSaveNote = useCallback(async () => {
     if (!selectedNote || selectedNote.content_json === '') {
       // Do not save if note is not fully loaded or no content_json
@@ -188,23 +223,15 @@ function App() {
 
   const handleOpenSettings = () => { console.log("Opening settings"); };
 
-  const handleEditorChange = (lexicalJsonString: string) => {
+  const handleEditorChange = useCallback((lexicalJsonString: string) => {
     if (selectedNoteId) {
+      // Markdown conversion can happen immediately as it's for local state.
+      // The more expensive state update (setNotes) is debounced.
       const newRawMarkdown = convertLexicalJSONToMarkdown(lexicalJsonString);
-      setNotes(prevNotes =>
-        prevNotes.map(note =>
-          note.id === selectedNoteId
-            ? {
-                ...note,
-                content_json: lexicalJsonString,
-                raw_markdown: newRawMarkdown, // Update raw_markdown here
-                updated_at: new Date().toISOString()
-              }
-            : note
-        )
-      );
+      debouncedUpdateNoteContentInState(selectedNoteId, lexicalJsonString, newRawMarkdown);
     }
-  };
+  }, [selectedNoteId, debouncedUpdateNoteContentInState]); // Removed convertLexicalJSONToMarkdown from deps as it's a static import
+
   const handleShowAudioRecordings = (noteId: string) => {
     setAudioRecordingsNoteId(noteId);
     setShowAudioRecordings(true);

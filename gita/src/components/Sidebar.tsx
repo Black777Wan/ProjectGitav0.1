@@ -16,7 +16,7 @@ interface SidebarProps {
   onSelectNote: (noteId: string) => void;
   onOpenSettings: () => void;
   onShowAudioRecordings?: (noteId: string) => void;
-  notes: { id: string; title: string; path: string }[];
+  notes: { id: string; title: string }[]; // Removed path property
   selectedNoteId: string | null;
   /** Prop to trigger focus on the search input, typically activated by App.tsx via Ctrl+F. */
   focusSearchInput?: boolean;
@@ -133,7 +133,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <div>
                         <div className="text-sm font-medium truncate">{note.title}</div> {/* Inherits themed text color */}
-                        <div className="text-xs text-light-muted dark:text-obsidian-muted truncate">{note.path}</div>
+                        {/* Removed path display as path prop is no longer available */}
                       </div>
                       
                       {onShowAudioRecordings && (
