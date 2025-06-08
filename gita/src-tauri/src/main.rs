@@ -12,6 +12,7 @@ pub mod block_handler;
 pub mod audio_handler;
 pub mod link_handler;
 
+use dotenvy;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
@@ -502,6 +503,7 @@ async fn get_references_for_block(state: State<'_, AppState>, block_id: String) 
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok();
     tauri::Builder::default()
     .setup(|app| {
         let app_handle = app.app_handle().clone();
