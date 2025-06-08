@@ -52,19 +52,34 @@ function App() {
         }));
         setNotes(placeholderNotes);
 
-        if (placeholderNotes.length > 0 && !selectedNoteId) {
+        // Attempt to create/select the daily note first.
+        // handleDailyNote is expected to set selectedNoteId if successful.
+        await handleDailyNote();
+
+        // Fallback: If, after attempting to load/create the daily note,
+        // no note is selected yet (i.e., selectedNoteId is still null)
+        // AND there are placeholder notes available, then select the first one.
+        // This covers cases where handleDailyNote might fail or if there are
+        // existing notes but none for today and handleDailyNote doesn't select one.
+        if (!selectedNoteId && placeholderNotes.length > 0) {
           setSelectedNoteId(placeholderNotes[0].id);
         }
-        // If selectedNoteId already exists (e.g. from previous session state, not implemented here),
-        // the other useEffect will pick it up and load its full content.
+        // If selectedNoteId was already set (e.g., by a previous session, though not implemented here)
+        // or by handleDailyNote, the above condition !selectedNoteId will be false,
+        // and this fallback selection will be skipped, which is correct.
       } catch (error) {
-        addErrorMessage(`Error loading initial notes: ${(error as Error).message}`);
+        // Catch errors from getAllNotes or handleDailyNote if it throws
+        addErrorMessage(`Error during initial note loading or daily note creation: ${(error as Error).message}`);
       } finally {
         setIsLoading(false);
       }
     };
     loadInitialNotesMetadata();
-  }, [addErrorMessage]); // Removed selectedNoteId, this effect is for initial metadata load
+    // It's important handleDailyNote is await'ed inside loadInitialNotesMetadata,
+    // so making the outer function async.
+    // The dependencies for this useEffect should include handleDailyNote
+    // because it's called within.
+  }, [addErrorMessage, handleDailyNote]);
 
   // New useEffect to load full note data when selectedNoteId changes
   useEffect(() => {
