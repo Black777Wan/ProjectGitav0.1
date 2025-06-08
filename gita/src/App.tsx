@@ -22,7 +22,7 @@ import { FiHelpCircle, FiSettings } from "react-icons/fi";
 import Tooltip from "./components/Tooltip";
 import ErrorDisplay from './components/ErrorDisplay'; // Import ErrorDisplay
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'; // Import the new hook
-import { convertLexicalJSONToMarkdown } from "../utils/lexicalUtils"; // Added import
+import { convertLexicalJSONToMarkdown } from "./utils/lexicalUtils"; // Added import
 
 function App() {
   const [notes, setNotes] = useState<Note[]>([]);

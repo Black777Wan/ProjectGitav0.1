@@ -32,23 +32,6 @@ impl Default for NoteFrontMatter {
     }
 }
 
-// Helper function to extract front matter from markdown content
-// Ensure this function does not have ::std::fs or other removed deps if they are not used
-// (it primarily uses string manipulation and regex)
-fn extract_front_matter(content: &str) -> (Option<String>, &str) {
-    let front_matter_regex = Regex::new(r"^(?s)---\s*
-(.*?)
----\s*
-?(.*)$").unwrap(); // Note: using (.*?) for non-greedy match on FM content
-    if let Some(caps) = front_matter_regex.captures(content) {
-        let fm_str = caps.get(1).map_or("", |m| m.as_str()).trim();
-        let rest_content = caps.get(2).map_or("", |m| m.as_str());
-        (Some(fm_str.to_string()), rest_content)
-    } else {
-        (None, content)
-    }
-}
-
 // All public functions (init_database, get_all_notes, search_notes, read_markdown_file,
 // write_markdown_file, create_note, create_daily_note, delete_note, find_backlinks)
 // and the public structs NoteMetadata and Note have been removed.

@@ -26,8 +26,6 @@ struct RecordingState {
     loopback_stream_thread: Option<JoinHandle<()>>,
     writer_thread: Option<JoinHandle<()>>,
     stop_signal: Arc<AtomicBool>,
-    mic_device_identifier: String, // Name or other unique ID
-    loopback_device_identifier: Option<String>, // Name or other unique ID
 }
 
 lazy_static::lazy_static! {
@@ -292,8 +290,7 @@ pub fn start_recording(page_id_opt: Option<&str>, recording_id: &str, audio_dir:
 
     // Configure Loopback
     let mut loopback_config_final: Option<StreamConfig> = None;
-    let mut loopback_actual_channels: Option<u16> = None;
-    let final_loopback_device_identifier = loopback_device_identifier.clone();
+    // let final_loopback_device_identifier = loopback_device_identifier.clone(); // Removed
 
     if let Some(ref dev) = loopback_device {
         let supported_loop_config = dev.default_input_config()
@@ -619,8 +616,8 @@ pub fn start_recording(page_id_opt: Option<&str>, recording_id: &str, audio_dir:
         loopback_stream_thread,
         writer_thread: Some(writer_thread),
         stop_signal,
-        mic_device_identifier, // Store the identifier
-        loopback_device_identifier: if loopback_actual_channels.is_some() { final_loopback_device_identifier } else { None }, // Store if loopback is active
+        // mic_device_identifier, // Store the identifier // Removed
+        // loopback_device_identifier: if loopback_actual_channels.is_some() { final_loopback_device_identifier } else { None }, // Store if loopback is active // Removed
     };
 
     let mut recordings_map = ACTIVE_RECORDINGS.lock().unwrap();

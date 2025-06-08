@@ -23,7 +23,6 @@ struct ExtractedBlockInfo {
 
 #[derive(Debug, Clone)]
 struct ParsedPageLink {
-    source_page_id: Uuid,
     target_title: Option<String>,
     target_id: Option<Uuid>,
     // If we need to identify which block a page link is in (e.g. for rich text editing later)
@@ -32,7 +31,6 @@ struct ParsedPageLink {
 
 #[derive(Debug, Clone)]
 struct ParsedBlockReference {
-    source_page_id: Uuid, // The page where this reference ((())) is made
     referencing_block_id: Uuid, // The block ID from content_json that contains the reference
     referenced_block_id: Uuid, // The block ID that is being pointed to
 }
@@ -359,9 +357,9 @@ fn extract_links_references_and_blocks(
                         for cap in PAGE_LINK_REGEX.captures_iter(text_content) {
                             let content = cap[1].trim().to_string();
                             if let Ok(target_uuid) = Uuid::parse_str(&content) {
-                                page_links.push(ParsedPageLink { source_page_id: current_page_id, target_id: Some(target_uuid), target_title: None });
+                                page_links.push(ParsedPageLink { target_id: Some(target_uuid), target_title: None });
                             } else {
-                                page_links.push(ParsedPageLink { source_page_id: current_page_id, target_id: None, target_title: Some(content) });
+                                page_links.push(ParsedPageLink { target_id: None, target_title: Some(content) });
                             }
                         }
 
@@ -371,7 +369,6 @@ fn extract_links_references_and_blocks(
                             for cap in BLOCK_REF_REGEX.captures_iter(text_content) {
                                 if let Ok(referenced_b_id) = Uuid::parse_str(cap[1].trim()) {
                                     block_references.push(ParsedBlockReference {
-                                        source_page_id: current_page_id,
                                         referencing_block_id: referencing_id,
                                         referenced_block_id: referenced_b_id,
                                     });
