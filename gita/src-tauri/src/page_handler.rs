@@ -355,7 +355,6 @@ fn extract_links_references_and_blocks(
             if let Some(node_type_str) = obj.get("type").and_then(|v| v.as_str()) {
                 if node_type_str == "text" {
                     if let Some(text_content) = obj.get("text").and_then(|v| v.as_str()) {
-                    if let Some(text_content) = obj.get("text").and_then(|v| v.as_str()) {
                         // Page links
                         for cap in PAGE_LINK_REGEX.captures_iter(text_content) {
                             let content = cap[1].trim().to_string();
