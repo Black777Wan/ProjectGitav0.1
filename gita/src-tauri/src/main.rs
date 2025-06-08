@@ -142,7 +142,7 @@ struct AppState {
 }
 
 // Initialize the app state
-async fn init_app_state(app_handle: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
+async fn init_app_state(app_handle: &AppHandle) -> Result<AppState, Box<dyn std::error::Error + Send + Sync>> {
     // Get the app data directory
     let app_data_dir = app_handle
         .path()
@@ -503,10 +503,19 @@ async fn get_references_for_block(state: State<'_, AppState>, block_id: String) 
 #[tokio::main]
 async fn main() {
     tauri::Builder::default()
-    .setup(|app| async move {
-        let app_state = init_app_state(&app.app_handle()).await?;
-        app.manage(app_state);
-        Ok::<(), Box<dyn std::error::Error + Send + Sync + 'static>>(())
+    .setup(|app| {
+        let app_handle = app.app_handle().clone();
+        tauri::async_runtime::spawn(async move {
+            match init_app_state(&app_handle).await {
+                Ok(app_state) => {
+                    app_handle.manage(app_state);
+                }
+                Err(e) => {
+                    eprintln!("Failed to initialize app state: {}", e);
+                }
+            }
+        });
+        Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_notes_directory,
