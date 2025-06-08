@@ -105,7 +105,7 @@ pub async fn update_block(
         return Ok(false); // No fields to update
     }
 
-    set_clauses.push("updated_at = now()"); // Always update updated_at
+    set_clauses.push("updated_at = now()".to_string()); // Always update updated_at
 
     let query_str = format!(
         "UPDATE blocks SET {} WHERE id = $1 RETURNING id", // RETURNING id to check if row was found

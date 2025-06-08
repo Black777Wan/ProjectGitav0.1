@@ -293,7 +293,7 @@ pub fn start_recording(page_id_opt: Option<&str>, recording_id: &str, audio_dir:
 
     // Configure Loopback
     let mut loopback_config_final: Option<StreamConfig> = None;
-    let mut loopback_actual_channels: Option<u16> = None;
+    let mut _loopback_actual_channels: Option<u16> = None;
     let final_loopback_device_identifier = loopback_device_identifier.clone();
 
     if let Some(ref dev) = loopback_device {
@@ -389,7 +389,7 @@ pub fn start_recording(page_id_opt: Option<&str>, recording_id: &str, audio_dir:
     let stop_signal = Arc::new(AtomicBool::new(false));
 
     // --- Stream Building ---
-    let err_fn = |err: cpal::StreamError| {
+    let _err_fn = |err: cpal::StreamError| {
         eprintln!("An error occurred on an audio stream: {}", err);
     };
 
